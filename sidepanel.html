@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f0e6d2; /* 연한 브라운 배경 */
+        font-size: 16px;
+        color: #4e3629; /* 어두운 브라운 텍스트 */
+    }
+    #chat-container {
+        background-color: #fff8e7; /* 매우 연한 브라운 배경 */
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(78, 54, 41, 0.1);
+        height: 90vh;
+        display: flex;
+        flex-direction: column;
+    }
+    #chat-messages {
+        flex-grow: 1;
+        overflow-y: auto;
+        margin-bottom: 20px;
+        padding: 10px;
+        border: 1px solid #d2b48c; /* 연한 브라운 테두리 */
+        border-radius: 10px;
+    }
+    .message {
+        margin-bottom: 15px;
+        padding: 12px;
+        border-radius: 10px;
+        font-size: 15px;
+    }
+    .user-message {
+        background-color: #d2b48c; /* 연한 브라운 배경 */
+        text-align: right;
+        color: #4e3629; /* 어두운 브라운 텍스트 */
+    }
+    .ai-message {
+        background-color: #e6ccb2; /* 매우 연한 브라운 배경 */
+        color: #4e3629; /* 어두운 브라운 텍스트 */
+    }
+    #user-input {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #b08968; /* 중간 브라운 테두리 */
+        border-radius: 20px;
+        box-sizing: border-box;
+        font-size: 15px;
+        background-color: #fff8e7; /* 매우 연한 브라운 배경 */
+        color: #4e3629; /* 어두운 브라운 텍스트 */
+    }
+    #send-button {
+        width: 100%;
+        padding: 12px;
+        margin-top: 10px;
+        background-color: #8b4513; /* 어두운 브라운 배경 */
+        color: #fff8e7; /* 매우 연한 브라운 텍스트 */
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 18px;
+    }
+    #send-button:hover {
+        background-color: #a0522d; /* 호버 시 약간 밝은 브라운 */
+    }
+    ::-webkit-scrollbar {
+        width: 10px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #f0e6d2; /* 연한 브라운 배경 */
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #b08968; /* 중간 브라운 */
+        border-radius: 5px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #8b4513; /* 어두운 브라운 */
+    }
+</style>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="chat-messages"></div>
+        <input type="text" id="user-input" placeholder="메시지를 입력하세요...">
+        <button id="send-button">전송</button>
+    </div>
+    <script src="sidepanel.js"></script>
+</body>
+</html>
