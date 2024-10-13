@@ -93,113 +93,126 @@ function removeExistingOverlay() {
 }
 
 function sendToAI(text, instruction) {
-  showLoading(instruction);
-  updateProgress("API에 요청을 보내는 중...");
+  chrome.storage.sync.get('instructions', function(data) {
+    const instructions = data.instructions || [];
+    const combinedInstruction = instructions.join('\n') + '\n' + instruction;
+    showLoading(combinedInstruction);
+    updateProgress("API에 요청을 보내는 중...");
 
-  chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'selectedModel'], function(result) {
-    if (!result.cohereApiKey && !result.mistralApiKey) {
-      showResult("API 키를 설정해주세요.");
-      return;
-    }
-
-    updateProgress("작업을 시작합니다...");
-
-    let apiUrl, headers, body;
-
-    if (result.selectedModel === 'mistralSmall') {
-      apiUrl = 'https://api.mistral.ai/v1/chat/completions';
-      headers = {
-        'Authorization': `Bearer ${result.mistralApiKey.trim()}`,
-        'Content-Type': 'application/json'
-      };
-      body = JSON.stringify({
-        model: "mistral-small-latest",
-        messages: [{ role: "user", content: `${instruction}\n\n텍스트: ${text}` }],
-        stream: true
-      });
-    } else {
-      apiUrl = 'https://api.cohere.com/v1/chat';
-      headers = {
-        'Authorization': `Bearer ${result.cohereApiKey.trim()}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      };
-      body = JSON.stringify({
-        message: `${instruction}\n\n텍스트: ${text}`,
-        stream: true,
-        temperature: 0
-      });
-    }
-
-    fetch(apiUrl, {
-      method: 'POST',
-      headers: headers,
-      body: body
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'selectedModel'], function(result) {
+      if (!result.cohereApiKey && !result.mistralApiKey) {
+        showResult("API 키를 설정해주세요.");
+        return;
       }
-      const reader = response.body.getReader();
-      let accumulatedResponse = "";
-      let buffer = "";
 
-      function readStream() {
-        reader.read().then(({ done, value }) => {
-          if (done) {
-            showResult(accumulatedResponse);
-            return;
-          }
-          const chunk = new TextDecoder().decode(value);
-          buffer += chunk;
-          
-          let newlineIndex;
-          while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-            const line = buffer.slice(0, newlineIndex).trim();
-            buffer = buffer.slice(newlineIndex + 1);
-            
-            if (line !== '') {
-              let jsonLine = line;
-              // Check and remove 'data: ' prefix if present
-              if (line.startsWith('data: ')) {
-                jsonLine = line.slice(6);
-              }
-              // Check and remove 'event: ' prefix if present
-              if (jsonLine.startsWith('event:')) {
-                continue; // Skip event lines
-              }
+      updateProgress("작업을 시작합니다...");
 
-              // Only parse if it starts with '{'
-              if (jsonLine.startsWith('{')) {
-                try {
-                  const parsed = JSON.parse(jsonLine);
-                  if (result.selectedModel === 'mistralSmall') {
-                    if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
-                      accumulatedResponse += parsed.choices[0].delta.content;
-                    }
-                  } else {
-                    if (parsed.event_type === 'text-generation') {
-                      accumulatedResponse += parsed.text;
-                    }
-                  }
-                  updateProgress(`처리 중: ${accumulatedResponse.length} 글자...`);
-                  updatePartialResult(accumulatedResponse);
-                } catch (e) {
-                  console.warn('Incomplete JSON, buffering:', e);
-                }
-              }
-            }
-          }
-          
-          readStream();
+      let apiUrl, headers, body;
+
+      if (result.selectedModel === 'mistralSmall') {
+        apiUrl = 'https://api.mistral.ai/v1/chat/completions';
+        headers = {
+          'Authorization': `Bearer ${result.mistralApiKey.trim()}`,
+          'Content-Type': 'application/json'
+        };
+        body = JSON.stringify({
+          model: "mistral-small-latest",
+          messages: [{ role: "user", content: `${combinedInstruction}\n\n텍스트: ${text}` }],
+          stream: true
+        });
+      } else {
+        apiUrl = 'https://api.cohere.com/v1/chat';
+        headers = {
+          'Authorization': `Bearer ${result.cohereApiKey.trim()}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        };
+        body = JSON.stringify({
+          message: `${combinedInstruction}\n\n텍스트: ${text}`,
+          stream: true,
+          temperature: 0
         });
       }
 
-      readStream();
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      showResult(`API 요청 중 오류가 발생했습니다: ${error.message}`);
+      chrome.runtime.sendMessage({ action: "isSidePanelOpen" }, (response) => {
+        let contextMessage;
+        if (response && response.isOpen) {
+          contextMessage = "사이드 패널이 열려 있어서 현재 페이지의 내용만 사용합니다.";
+        } else {
+          contextMessage = `현재 웹페이지의 내용: ${text}`;
+        }
+
+        fetch(apiUrl, {
+          method: 'POST',
+          headers: headers,
+          body: body
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const reader = response.body.getReader();
+          let accumulatedResponse = "";
+          let buffer = "";
+
+          function readStream() {
+            reader.read().then(({ done, value }) => {
+              if (done) {
+                showResult(accumulatedResponse);
+                return;
+              }
+              const chunk = new TextDecoder().decode(value);
+              buffer += chunk;
+            
+              let newlineIndex;
+              while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+                const line = buffer.slice(0, newlineIndex).trim();
+                buffer = buffer.slice(newlineIndex + 1);
+              
+                if (line !== '') {
+                  let jsonLine = line;
+                  // Check and remove 'data: ' prefix if present
+                  if (line.startsWith('data: ')) {
+                    jsonLine = line.slice(6);
+                  }
+                  // Check and remove 'event: ' prefix if present
+                  if (jsonLine.startsWith('event:')) {
+                    continue; // Skip event lines
+                  }
+
+                  // Only parse if it starts with '{'
+                  if (jsonLine.startsWith('{')) {
+                    try {
+                      const parsed = JSON.parse(jsonLine);
+                      if (result.selectedModel === 'mistralSmall') {
+                        if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                          accumulatedResponse += parsed.choices[0].delta.content;
+                        }
+                      } else {
+                        if (parsed.event_type === 'text-generation') {
+                          accumulatedResponse += parsed.text;
+                        }
+                      }
+                      updateProgress(`처리 중: ${accumulatedResponse.length} 글자...`);
+                      updatePartialResult(accumulatedResponse);
+                    } catch (e) {
+                      console.warn('Incomplete JSON, buffering:', e);
+                    }
+                  }
+                }
+              }
+            
+              readStream();
+            });
+          }
+
+          readStream();
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          showResult(`API 요청 중 오류가 발생했습니다: ${error.message}`);
+        });
+      });
     });
   });
 }
@@ -225,13 +238,36 @@ function showResult(result) {
   const content = document.createElement('div');
   content.innerHTML = `
     <h2 style="margin-top: 0; margin-bottom: 20px; color: #2c3e50;">결과</h2>
-    <div style="margin-bottom: 20px; line-height: 1.6; color: #444;">${result.replace(/\n/g, '<br>')}</div>
+    <div id="resultText" style="margin-bottom: 20px; line-height: 1.6; color: #444;">${result.replace(/\n/g, '<br>')}</div>
     <button id="closeOverlay">닫기</button>
+    <button id="copyResult">복사</button>
+    <span id="aiModelName"></span>
   `;
   overlay.appendChild(content);
   document.body.appendChild(overlay);
 
   document.getElementById('closeOverlay').addEventListener('click', removeExistingOverlay);
+
+  document.getElementById('copyResult').addEventListener('click', function() {
+    const resultText = document.getElementById('resultText');
+    if (resultText) {
+      navigator.clipboard.writeText(resultText.innerText)
+        .then(() => {
+          console.log('Content copied to clipboard');
+        })
+        .catch(err => {
+          console.error('Failed to copy: ', err);
+        });
+    }
+  });
+
+  chrome.storage.sync.get(['selectedModel'], function(items) {
+    const aiModelName = items.selectedModel;
+    const aiModelSpan = document.getElementById('aiModelName');
+    if (aiModelSpan) {
+      aiModelSpan.textContent = `(${aiModelName})`;
+    }
+  });
 }
 
 function showLoading(instruction) {
@@ -290,6 +326,11 @@ function showLoading(instruction) {
     }
     #summaryOverlay button:hover {
       background-color: #2980b9;
+    }
+    #aiModelName {
+      margin-left: 10px;
+      font-size: 0.9em;
+      color: #666;
     }
   `;
   document.head.appendChild(style);

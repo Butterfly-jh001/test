@@ -66,6 +66,35 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         aiMessage.textContent = text;
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // AI 모델 이름 표시 제거
+        // chrome.storage.sync.get(['selectedModel'], function(items) {
+        //     const aiModelName = items.selectedModel;
+        //     const aiModelSpan = document.createElement('span');
+        //     aiModelSpan.textContent = `(${aiModelName})`;
+        //     aiModelSpan.style.marginLeft = '10px';
+        //     aiModelSpan.style.fontSize = '0.9em';
+        //     aiModelSpan.style.color = '#666';
+        //     aiMessage.appendChild(aiModelSpan);
+        // });
+
+        const copyButton = document.createElement('span');
+        copyButton.textContent = '복사';
+        copyButton.style.position = 'absolute';
+        copyButton.style.bottom = '10px';
+        copyButton.style.right = '10px';
+        copyButton.style.cursor = 'pointer';
+        copyButton.style.color = '#8b4513'; // 어두운 브라운 색상
+        copyButton.addEventListener('click', function() {
+            navigator.clipboard.writeText(aiMessage.textContent.replace('복사', '')) // "복사" 글자 제거하고 복사
+                .then(() => {
+                    console.log('Content copied to clipboard');
+                })
+                .catch(err => {
+                    console.error('Failed to copy: ', err);
+                });
+        });
+        aiMessage.appendChild(copyButton);
     }
 
     function sendMessage() {
@@ -74,7 +103,7 @@ document.addEventListener('DOMContentLoaded', function() {
             addMessage(message, true);
             userInput.value = '';
             
-            chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'selectedModel'], function(result) {
+            chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'selectedModel', 'instructions'], function(result) {
                 if (!result.cohereApiKey && !result.mistralApiKey) {
                     addMessage("API 키를 설정해주세요.", false);
                     return;
@@ -102,7 +131,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     body = JSON.stringify({
                         model: "mistral-small-latest",
                         messages: [
-                            { role: "user", content: `${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.` }
+                            { role: "user", content: result.instructions ? `${result.instructions.join('\n')}\n${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.` : `${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.}` }
                         ],
                         stream: true
                     });
@@ -114,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         'Accept': 'application/json'
                     };
                     body = JSON.stringify({
-                        message: `${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`,
+                        message: result.instructions ? `${result.instructions.join('\n')}\n${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.` : `${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`,
                         chat_history: chatHistory,
                         stream: true,
                         temperature: 0.7
@@ -139,6 +168,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (done) {
                                 updateAIMessage(accumulatedResponse);
                                 conversationHistory.push({role: "Chatbot", message: accumulatedResponse});
+                                
+                                // 답변이 완료된 후에 AI 모델 이름 표시
+                                const aiModelNameSpan = document.createElement('span');
+                                aiModelNameSpan.textContent = `(${result.selectedModel})`;
+                                aiModelNameSpan.style.marginLeft = '10px';
+                                aiModelNameSpan.style.fontSize = '0.9em';
+                                aiModelNameSpan.style.color = '#666';
+                                chatMessages.appendChild(aiModelNameSpan);
+                                
                                 return;
                             }
                     

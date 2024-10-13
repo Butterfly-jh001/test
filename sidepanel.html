@@ -35,6 +35,7 @@
         padding: 12px;
         border-radius: 10px;
         font-size: 15px;
+        position: relative; /* 복사 버튼을 위한 위치 설정 */
     }
     .user-message {
         background-color: #d2b48c; /* 연한 브라운 배경 */
@@ -81,6 +82,21 @@
     }
     ::-webkit-scrollbar-thumb:hover {
         background: #8b4513; /* 어두운 브라운 */
+    }
+    .copy-button {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #8b4513; /* 어두운 브라운 배경 */
+        color: #fff8e7; /* 매우 연한 브라운 텍스트 */
+        border: none;
+        border-radius: 5px;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    .copy-button:hover {
+        background-color: #a0522d; /* 호버 시 약간 밝은 브라운 */
     }
 </style>
 </head>
