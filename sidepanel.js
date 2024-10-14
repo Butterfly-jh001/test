@@ -67,17 +67,6 @@ document.addEventListener('DOMContentLoaded', function() {
         aiMessage.textContent = text;
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
-        // AI 모델 이름 표시 제거
-        // chrome.storage.sync.get(['selectedModel'], function(items) {
-        //     const aiModelName = items.selectedModel;
-        //     const aiModelSpan = document.createElement('span');
-        //     aiModelSpan.textContent = `(${aiModelName})`;
-        //     aiModelSpan.style.marginLeft = '10px';
-        //     aiModelSpan.style.fontSize = '0.9em';
-        //     aiModelSpan.style.color = '#666';
-        //     aiMessage.appendChild(aiModelSpan);
-        // });
-
         const copyButton = document.createElement('span');
         copyButton.textContent = '복사';
         copyButton.style.position = 'absolute';
@@ -103,8 +92,8 @@ document.addEventListener('DOMContentLoaded', function() {
             addMessage(message, true);
             userInput.value = '';
             
-            chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'selectedModel', 'instructions'], function(result) {
-                if (!result.cohereApiKey && !result.mistralApiKey) {
+            chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'selectedModel', 'instructions'], function(result) {
+                if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey) {
                     addMessage("API 키를 설정해주세요.", false);
                     return;
                 }
@@ -135,7 +124,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         ],
                         stream: true
                     });
-                } else {
+                } else if (result.selectedModel === 'gemini') {
+                    apiUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent';
+                    headers = {
+                        'Authorization': `Bearer ${result.geminiApiKey.trim()}`,
+                        'Content-Type': 'application/json'
+                    };
+                    body = JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `${result.instructions ? result.instructions.join('\n') + '\n' : ''}${contextMessage}\n\n사용자 질문: ${message}`
+                            }]
+                        }]
+                    });
+                } else { // default to cohere
                     apiUrl = 'https://api.cohere.com/v1/chat';
                     headers = {
                         'Authorization': `Bearer ${result.cohereApiKey.trim()}`,
@@ -203,6 +205,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                             if (result.selectedModel === 'mistralSmall') {
                                                 if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
                                                     accumulatedResponse += parsed.choices[0].delta.content;
+                                                }
+                                            } else if (result.selectedModel === 'gemini') {
+                                                if (parsed.candidates && parsed.candidates[0] && parsed.candidates[0].content) {
+                                                    accumulatedResponse += parsed.candidates[0].content;
                                                 }
                                             } else {
                                                 if (parsed.event_type === 'text-generation') {

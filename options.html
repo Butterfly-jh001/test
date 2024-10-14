@@ -65,6 +65,8 @@
         <select id="aiModel">
             <option value="cohere">Cohere</option>
             <option value="mistralSmall">Mistral Small</option>
+            <option value="Gemini">Gemini</option>
+            
         </select>
         <div id="cohereApiSection">
             <label for="cohereApiKey">Cohere API 키:</label>
@@ -73,6 +75,10 @@
         <div id="mistralApiSection">
             <label for="mistralApiKey">Mistral API 키:</label>
             <input type="text" id="mistralApiKey" placeholder="Mistral API 키를 입력하세요">
+        </div>
+        <div id="GeminiModelSection">
+            <label for="geminiApiKey">Gemini API 키:</label>
+            <input type="text" id="geminiApiKey" placeholder="Gemini API 키를 입력하세요">
         </div>
 
         <button id="save">저장</button> <p id="status"></p>

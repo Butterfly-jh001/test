@@ -71,27 +71,28 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 function sendMessage(tabId, info) {
   chrome.scripting.executeScript({
-    target: { tabId: tabId },
-    files: ['content.js']
+      target: { tabId: tabId },
+      files: ['content.js']
   }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('Failed to inject content script:', chrome.runtime.lastError.message);
-    } else {
-      const message = {
-        action: info.menuItemId,
-        text: info.selectionText
-      };
-      
-      chrome.tabs.sendMessage(tabId, message, (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('Error:', chrome.runtime.lastError.message);
-        } else {
-          console.log('Message sent successfully');
-        }
-      });
-    }
+      if (chrome.runtime.lastError) {
+          console.error('Failed to inject content script:', chrome.runtime.lastError.message);
+      } else {
+          const message = {
+              action: info.menuItemId,
+              text: info.selectionText
+          };
+          
+          chrome.tabs.sendMessage(tabId, message, (response) => {
+              if (chrome.runtime.lastError) {
+                  console.error('Error:', chrome.runtime.lastError.message);
+              } else {
+                  console.log('Message sent successfully');
+              }
+          });
+      }
   });
 }
+
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id });
 });
