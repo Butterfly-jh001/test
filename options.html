@@ -65,8 +65,9 @@
         <select id="aiModel">
             <option value="cohere">Cohere</option>
             <option value="mistralSmall">Mistral Small</option>
-            <option value="Gemini">Gemini</option>
-            
+            <option value="gemini">Gemini</option>
+            <option value="geminiflash">Gemini Flash</option>
+            <option value="groq">Groq Llama 3.1 70B</option>
         </select>
         <div id="cohereApiSection">
             <label for="cohereApiKey">Cohere API 키:</label>
@@ -76,9 +77,17 @@
             <label for="mistralApiKey">Mistral API 키:</label>
             <input type="text" id="mistralApiKey" placeholder="Mistral API 키를 입력하세요">
         </div>
-        <div id="GeminiModelSection">
+        <div id="geminiApiSection">
             <label for="geminiApiKey">Gemini API 키:</label>
             <input type="text" id="geminiApiKey" placeholder="Gemini API 키를 입력하세요">
+        </div>
+        <div id="geminiflashApiSection">
+            <label for="geminiflashApiKey">Gemini Flash API 키:</label>
+            <input type="text" id="geminiflashApiKey" placeholder="Gemini Flash API 키를 입력하세요">
+        </div>
+        <div id="groqApiSection">
+            <label for="groqApiKey">Groq Llama 3.1 70B API 키:</label>
+            <input type="text" id="groqApiKey" placeholder="Groq Llama 3.1 70B API 키를 입력하세요">
         </div>
 
         <button id="save">저장</button> <p id="status"></p>

@@ -2,6 +2,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var cohereApiKeyInput = document.getElementById('cohereApiKey');
   var mistralApiKeyInput = document.getElementById('mistralApiKey');
   var geminiApiKeyInput = document.getElementById('geminiApiKey');
+  var geminiflashApiKeyInput = document.getElementById('geminiflashApiKey'); // 추가
+
+  var groqApiKeyInput = document.getElementById('groqApiKey'); // 추가
+
   var aiModelSelect = document.getElementById('aiModel');
   var saveButton = document.getElementById('save');
   var status = document.getElementById('status');
@@ -9,7 +13,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function updateUI(data) {
       cohereApiKeyInput.value = data.cohereApiKey || '';
       mistralApiKeyInput.value = data.mistralApiKey || '';
-      geminiApiKeyInput.value = data.geminiApiKey || ''
+      geminiApiKeyInput.value = data.geminiApiKey || '';
+      geminiflashApiKeyInput.value = data.geminiflashApiKey || ''; // 추가
+
+      groqApiKeyInput.value = data.groqApiKey || ''; // 추가
       aiModelSelect.value = data.selectedModel || 'cohere';
       updateApiKeyVisibility(aiModelSelect.value);
       console.log('Loaded settings:', data); // 디버깅을 위한 로그
@@ -19,14 +26,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const cohereSection = document.getElementById('cohereApiSection');
     const mistralSection = document.getElementById('mistralApiSection');
     const geminiSection = document.getElementById('geminiApiSection');
+    const geminiflashSection = document.getElementById('geminiflashApiSection'); // 추가
     
+    const groqSection = document.getElementById('groqApiSection');  // 추가
+
     cohereSection.style.display = selectedModel === 'cohere' ? 'block' : 'none';
     mistralSection.style.display = selectedModel === 'mistralSmall' ? 'block' : 'none';
-    geminiSection.style.display = selectedModel === 'gemini' ? 'block' : 'none'; 
+    geminiSection.style.display = selectedModel === 'gemini' ? 'block' : 'none';
+    geminiflashSection.style.display = selectedModel === 'geminiflash' ? 'block' : 'none'; // 추가
+
+    groqSection.style.display = selectedModel === 'groq'? 'block': 'none';   // 추가
+
   }
 
   // 저장된 설정 불러오기
-  chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'selectedModel'], function(data) {
+  chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'groqApiKey', 'selectedModel'], function(data) { // 추가
       updateUI(data);
   });
 
@@ -35,12 +49,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var cohereApiKey = cohereApiKeyInput.value.trim();
     var mistralApiKey = mistralApiKeyInput.value.trim();
     var geminiApiKey = geminiApiKeyInput.value.trim();
+    var geminiflashApiKey = geminiflashApiKeyInput.value.trim(); // 추가
+
+    var groqApiKey = groqApiKeyInput.value.trim(); // 추가
+
     var selectedModel = aiModelSelect.value;
 
     var dataToSave = {
         cohereApiKey: cohereApiKey,
         mistralApiKey: mistralApiKey,
         geminiApiKey: geminiApiKey,
+        geminiflashApiKey: geminiflashApiKey, // 추가
+
+        groqApiKey: groqApiKey, // 추가
         selectedModel: selectedModel
     };
 

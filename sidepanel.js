@@ -5,51 +5,38 @@ document.addEventListener('DOMContentLoaded', function() {
     let pageContent = '';
     let conversationHistory = [];
 
-    function updatePageContent() {
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    // 페이지 컨텐츠 업데이트 함수
+    async function updatePageContent() {
+        try {
+            const tabs = await chrome.tabs.query({active: true, currentWindow: true});
             if (tabs[0]) {
                 if (tabs[0].url.startsWith('chrome://')) {
                     pageContent = "이 페이지의 내용은 보안상의 이유로 접근할 수 없습니다.";
                     console.log("Chrome internal page detected. Cannot access content.");
                     return;
                 }
-    
-                chrome.tabs.sendMessage(tabs[0].id, {action: "getPageContent"}, function(response) {
-                    if (chrome.runtime.lastError) {
-                        console.warn("Error getting page content:", chrome.runtime.lastError.message);
-                        
-                        chrome.scripting.executeScript({
-                            target: { tabId: tabs[0].id },
-                            function: getPageContent
-                        }, (injectionResults) => {
-                            if (chrome.runtime.lastError) {
-                                console.error('Script injection failed:', chrome.runtime.lastError.message);
-                                pageContent = "페이지 내용을 가져오는 데 실패했습니다.";
-                            } else if (injectionResults && injectionResults[0]) {
-                                pageContent = injectionResults[0].result;
-                                console.log("Page content updated via injection:", pageContent.substring(0, 100) + "...");
-                            }
-                        });
-                    } else if (response && response.content) {
-                        pageContent = response.content;
-                        console.log("Page content updated:", pageContent.substring(0, 100) + "...");
-                    }
-                });
+
+                const response = await chrome.tabs.sendMessage(tabs[0].id, {action: "getPageContent"});
+                if (response && response.content) {
+                    pageContent = response.content;
+                    console.log("Page content updated:", pageContent.substring(0, 100) + "...");
+                } else {
+                    throw new Error("Failed to get page content");
+                }
             }
-        });
+        } catch (error) {
+            console.error('Error updating page content:', error);
+            pageContent = "페이지 내용을 가져오는 데 실패했습니다.";
+        }
     }
 
-    function getPageContent() {
-        return document.body.innerText;
-    }
-
+    // 초기 페이지 컨텐츠 업데이트
     updatePageContent();
-    setInterval(updatePageContent, 5000);
 
+    // 메시지 추가 함수
     function addMessage(message, isUser) {
         const messageElement = document.createElement('div');
-        messageElement.classList.add('message');
-        messageElement.classList.add(isUser ? 'user-message' : 'ai-message');
+        messageElement.classList.add('message', isUser ? 'user-message' : 'ai-message');
         messageElement.textContent = message;
         chatMessages.appendChild(messageElement);
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -57,6 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
         conversationHistory.push({role: isUser ? "User" : "Chatbot", message: message});
     }
 
+    // AI 메시지 업데이트 함수
     function updateAIMessage(text) {
         let aiMessage = chatMessages.lastElementChild;
         if (!aiMessage || !aiMessage.classList.contains('ai-message')) {
@@ -67,187 +55,204 @@ document.addEventListener('DOMContentLoaded', function() {
         aiMessage.textContent = text;
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
+        addCopyButton(aiMessage);
+    }
+
+    // 복사 버튼 추가 함수
+    function addCopyButton(messageElement) {
         const copyButton = document.createElement('span');
         copyButton.textContent = '복사';
-        copyButton.style.position = 'absolute';
-        copyButton.style.bottom = '10px';
-        copyButton.style.right = '10px';
-        copyButton.style.cursor = 'pointer';
-        copyButton.style.color = '#8b4513'; // 어두운 브라운 색상
-        copyButton.addEventListener('click', function() {
-            navigator.clipboard.writeText(aiMessage.textContent.replace('복사', '')) // "복사" 글자 제거하고 복사
-                .then(() => {
-                    console.log('Content copied to clipboard');
-                })
-                .catch(err => {
-                    console.error('Failed to copy: ', err);
-                });
+        copyButton.style.cssText = 'position: absolute; bottom: -20px; right: 10px; cursor: pointer; color: #8b4513;';
+        copyButton.addEventListener('click', () => {
+            navigator.clipboard.writeText(messageElement.textContent.replace('복사', ''))
+                .then(() => console.log('Content copied to clipboard'))
+                .catch(err => console.error('Failed to copy: ', err));
         });
-        aiMessage.appendChild(copyButton);
+        messageElement.appendChild(copyButton);
     }
 
-    function sendMessage() {
+    // API 요청 함수
+    async function makeAPIRequest(apiConfig, message) {
+        const response = await fetch(apiConfig.url, {
+            method: 'POST',
+            headers: apiConfig.headers,
+            body: apiConfig.body(message)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+        }
+
+        return response;
+    }
+
+    // 스트리밍 응답 처리 함수
+    async function handleStreamingResponse(response, updateCallback) {
+        const reader = response.body.getReader();
+        let accumulatedResponse = "";
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += new TextDecoder().decode(value);
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (line.trim() === '') continue;
+
+                let jsonLine = line.startsWith('data: ') ? line.slice(6) : line;
+                if (jsonLine.startsWith('event:')) continue;
+
+                try {
+                    const parsed = JSON.parse(jsonLine);
+                    accumulatedResponse += extractResponseContent(parsed);
+                    updateCallback(accumulatedResponse);
+                } catch (e) {
+                    console.warn('Incomplete JSON, buffering:', e);
+                }
+            }
+        }
+
+        return accumulatedResponse;
+    }
+
+    // 응답 내용 추출 함수
+    function extractResponseContent(parsed) {
+        if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+            return parsed.choices[0].delta.content;
+        } else if (parsed.event_type === 'text-generation' && parsed.text) {
+            return parsed.text;
+        }
+        return '';
+    }
+
+    // 메시지 전송 함수
+    async function sendMessage() {
         const message = userInput.value.trim();
-        if (message) {
-            addMessage(message, true);
-            userInput.value = '';
-            
-            chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'selectedModel', 'instructions'], function(result) {
-                if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey) {
-                    addMessage("API 키를 설정해주세요.", false);
-                    return;
-                }
-    
-                const chatHistory = conversationHistory.map(item => ({
-                    role: item.role,
-                    message: item.message
-                }));
-    
-                updateAIMessage("답변을 생성 중입니다...");
-    
-                const contextMessage = pageContent.startsWith("이 페이지의 내용은") || pageContent.startsWith("페이지 내용을")
-                    ? "현재 페이지의 내용을 가져올 수 없습니다."
-                    : `현재 웹페이지의 내용: ${pageContent}`;
-    
-                let apiUrl, headers, body;
+        if (!message) return;
 
-                if (result.selectedModel === 'mistralSmall') {
-                    apiUrl = 'https://api.mistral.ai/v1/chat/completions';
-                    headers = {
-                        'Authorization': `Bearer ${result.mistralApiKey.trim()}`,
-                        'Content-Type': 'application/json'
-                    };
-                    body = JSON.stringify({
-                        model: "mistral-small-latest",
-                        messages: [
-                            { role: "user", content: result.instructions ? `${result.instructions.join('\n')}\n${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.` : `${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.}` }
-                        ],
-                        stream: true
-                    });
-                } else if (result.selectedModel === 'gemini') {
-                    apiUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent';
-                    headers = {
-                        'Authorization': `Bearer ${result.geminiApiKey.trim()}`,
-                        'Content-Type': 'application/json'
-                    };
-                    body = JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: `${result.instructions ? result.instructions.join('\n') + '\n' : ''}${contextMessage}\n\n사용자 질문: ${message}`
-                            }]
-                        }]
-                    });
-                } else { // default to cohere
-                    apiUrl = 'https://api.cohere.com/v1/chat';
-                    headers = {
-                        'Authorization': `Bearer ${result.cohereApiKey.trim()}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    };
-                    body = JSON.stringify({
-                        message: result.instructions ? `${result.instructions.join('\n')}\n${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.` : `${contextMessage}\n\n사용자 질문: ${message}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`,
-                        chat_history: chatHistory,
-                        stream: true,
-                        temperature: 0.7
-                    });
-                }
+        addMessage(message, true);
+        userInput.value = '';
 
-                fetch(apiUrl, {
-                    method: 'POST',
-                    headers: headers,
-                    body: body
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    const reader = response.body.getReader();
-                    let accumulatedResponse = "";
-                    let buffer = "";
+        try {
+            const config = await getAPIConfig();
+            updateAIMessage("답변을 생성 중입니다...");
 
-                    function readStream() {
-                        reader.read().then(function processText({ done, value }) {
-                            if (done) {
-                                updateAIMessage(accumulatedResponse);
-                                conversationHistory.push({role: "Chatbot", message: accumulatedResponse});
-                                
-                                // 답변이 완료된 후에 AI 모델 이름 표시
-                                const aiModelNameSpan = document.createElement('span');
-                                aiModelNameSpan.textContent = `(${result.selectedModel})`;
-                                aiModelNameSpan.style.marginLeft = '10px';
-                                aiModelNameSpan.style.fontSize = '0.9em';
-                                aiModelNameSpan.style.color = '#666';
-                                chatMessages.appendChild(aiModelNameSpan);
-                                
-                                return;
-                            }
-                    
-                            buffer += new TextDecoder().decode(value);
-                            const lines = buffer.split('\n');
-                            buffer = lines.pop(); // 마지막 라인은 버퍼에 남김
-                    
-                            lines.forEach(line => {
-                                if (line.trim() !== '') {
-                                    let jsonLine = line;
-                                    // Check and remove 'data: ' prefix if present
-                                    if (line.startsWith('data: ')) {
-                                        jsonLine = line.slice(6);
-                                    }
-                                    // Check and remove 'event: ' prefix if present
-                                    if (jsonLine.startsWith('event:')) {
-                                        return; // Skip event lines
-                                    }
-                                    
-                                    // Only parse if it starts with '{'
-                                    if (jsonLine.startsWith('{')) {
-                                        try {
-                                            const parsed = JSON.parse(jsonLine);
-                                            if (result.selectedModel === 'mistralSmall') {
-                                                if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
-                                                    accumulatedResponse += parsed.choices[0].delta.content;
-                                                }
-                                            } else if (result.selectedModel === 'gemini') {
-                                                if (parsed.candidates && parsed.candidates[0] && parsed.candidates[0].content) {
-                                                    accumulatedResponse += parsed.candidates[0].content;
-                                                }
-                                            } else {
-                                                if (parsed.event_type === 'text-generation') {
-                                                    accumulatedResponse += parsed.text;
-                                                }
-                                            }
-                                            updateAIMessage(accumulatedResponse);
-                                        } catch (e) {
-                                            console.warn('Incomplete JSON, buffering:', e);
-                                        }
-                                    }
-                                }
-                            });
-                    
-                            return readStream();
-                        });
-                    }
+            const response = await makeAPIRequest(config, message);
+            let aiResponse;
 
-                    readStream();
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    updateAIMessage(`API 요청 중 오류가 발생했습니다: ${error.message}`);
-                });
-            });
+            if (config.isStreaming) {
+                aiResponse = await handleStreamingResponse(response, updateAIMessage);
+            } else {
+                const data = await response.json();
+                aiResponse = extractNonStreamingResponse(data, config.model);
+            }
+
+            updateAIMessage(aiResponse);
+            conversationHistory.push({role: "Chatbot", message: aiResponse});
+            addModelNameToLastMessage(config.model);
+        } catch (error) {
+            console.error('Error:', error);
+            updateAIMessage(`API 요청 중 오류가 발생했습니다: ${error.message}`);
         }
     }
 
+    // API 설정 가져오기 함수
+    async function getAPIConfig() {
+        return new Promise((resolve) => {
+            chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'selectedModel', 'instructions'], function(result) {
+                if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey && !result.geminiflashApiKey) {
+                    throw new Error("API 키를 설정해주세요.");
+                }
+
+                const contextMessage = `현재 웹페이지의 내용: ${pageContent}`;
+                const config = {
+                    model: result.selectedModel,
+                    isStreaming: true,
+                    instructions: result.instructions ? result.instructions.join('\n') : ''
+                };
+
+                switch (result.selectedModel) {
+                    case 'mistralSmall':
+                        config.url = 'https://api.mistral.ai/v1/chat/completions';
+                        config.headers = {
+                            'Authorization': `Bearer ${result.mistralApiKey.trim()}`,
+                            'Content-Type': 'application/json'
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            model: "mistral-small-latest",
+                            messages: [{ role: "user", content: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.` }],
+                            stream: true
+                        });
+                        break;
+                    case 'gemini':
+                    case 'geminiflash':
+                        const apiKey = result.selectedModel === 'gemini' ? result.geminiApiKey : result.geminiflashApiKey;
+                        config.url = `https://generativelanguage.googleapis.com/v1${result.selectedModel === 'geminiflash' ? 'beta' : ''}/models/${result.selectedModel === 'gemini' ? 'gemini-pro' : 'gemini-1.5-flash-latest'}:generateContent?key=${apiKey.trim()}`;
+                        config.headers = { 'Content-Type': 'application/json' };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: { temperature: 0 }
+                        });
+                        config.isStreaming = false;
+                        break;
+                    default: // cohere
+                        config.url = 'https://api.cohere.com/v1/chat';
+                        config.headers = {
+                            'Authorization': `Bearer ${result.cohereApiKey.trim()}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            message: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`,
+                            chat_history: conversationHistory,
+                            stream: true,
+                            temperature: 0.7
+                        });
+                }
+
+                resolve(config);
+            });
+        });
+    }
+
+    // 비스트리밍 응답 추출 함수
+    function extractNonStreamingResponse(data, model) {
+        if (model.startsWith('gemini')) {
+            if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+                return data.candidates[0].content.parts.map(part => part.text).join('');
+            }
+        }
+        console.error("Unexpected API response format:", data);
+        return "API 응답 형식이 예상과 다릅니다.";
+    }
+
+    // 마지막 메시지에 모델 이름 추가 함수
+    function addModelNameToLastMessage(model) {
+        const aiModelNameSpan = document.createElement('span');
+        aiModelNameSpan.textContent = `(${model})`;
+        aiModelNameSpan.style.cssText = 'margin-left: 10px; font-size: 0.9em; color: #666;';
+        chatMessages.appendChild(aiModelNameSpan);
+    }
+
+    // 이벤트 리스너 설정
     sendButton.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            sendMessage();
-        }
+        if (e.key === 'Enter') sendMessage();
     });
 });
 
+// 컨텐츠 스크립트 메시지 리스너
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "getPageContent") {
-      sendResponse({content: document.body.innerText});
+        sendResponse({content: document.body.innerText});
     }
-    return true;  // 비동기 응답을 위해 true 반환
+    return true;
 });
