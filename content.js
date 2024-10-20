@@ -92,13 +92,13 @@ function removeExistingOverlay() {
 
 async function sendToAI(text, instruction) {
   try {
-    const result = await chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'selectedModel', 'instructions']);
+    const result = await chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'groqApiKey', 'selectedModel', 'instructions']);
     const instructions = result.instructions || [];
     const combinedInstruction = instructions.join('\n') + '\n' + instruction;
     showLoading(combinedInstruction);
     updateProgress("API에 요청을 보내는 중...");
 
-    if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey && !result.geminiflashApiKey) {
+    if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey && !result.geminiflashApiKey && !result.groqApiKey) {
       throw new Error("API 키를 설정해주세요.");
     }
 
@@ -132,37 +132,45 @@ async function sendToAI(text, instruction) {
 }
 
 async function handleStreamingResponse(response, model, updateCallback) {
-    const reader = response.body.getReader();
-    let accumulatedResponse = "";
-    let buffer = "";
+  const reader = response.body.getReader();
+  let accumulatedResponse = "";
+  let buffer = "";
 
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+  while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-        buffer += new TextDecoder().decode(value);
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
+      buffer += new TextDecoder().decode(value);
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
 
-        for (const line of lines) {
-            if (line.trim() === '') continue;
+      for (const line of lines) {
+          if (line.trim() === '') continue;
 
-            let jsonLine = line.startsWith('data: ') ? line.slice(6) : line;
-            if (jsonLine.startsWith('event:')) continue;
+          try {
+              // Cohere 형식
+              if (model === 'cohere' && line.startsWith('event:')) continue;
+              
+              // Groq 형식
+              if (model === 'groq' && line.startsWith(':')) continue;
+              
+              let jsonLine = line.startsWith('data: ') ? line.slice(6) : line;
+              
+              const parsed = JSON.parse(jsonLine);
+              const content = extractStreamContent(parsed, model);
+              
+              if (content) {
+                  accumulatedResponse += content;
+                  updateCallback(accumulatedResponse);
+              }
+          } catch (e) {
+              console.warn(`Parsing error for ${model}:`, e);
+          }
+      }
+  }
 
-            try {
-                const parsed = JSON.parse(jsonLine);
-                accumulatedResponse += extractStreamContent(parsed, model);
-                updateCallback(accumulatedResponse);
-            } catch (e) {
-                console.warn('Incomplete JSON, buffering:', e);
-            }
-        }
-    }
-
-    return accumulatedResponse;
+  return accumulatedResponse;
 }
-
 
 async function getAPIConfig(result, instruction, text) {
     return new Promise((resolve) => {
@@ -215,6 +223,26 @@ async function getAPIConfig(result, instruction, text) {
                 });
                 config.isStreaming = false;
                 break;
+            case 'groq':
+              config.url = 'https://api.groq.com/openai/v1/chat/completions';
+              config.headers = {
+                  'Authorization': `Bearer ${result.groqApiKey.trim()}`,
+                  'Content-Type': 'application/json',
+              };
+              config.body = JSON.stringify({
+                  "messages": [
+                      {
+                          "content": `${config.instructions}\n${contextMessage}\n\n${instruction}`,
+                          "role": "user"
+                      }
+                  ],
+                  "model": "llama-3.1-70b-versatile",
+                  "stream": config.isStreaming // Groq API가 스트리밍을 지원하면 추가
+              });
+              // Groq API가 스트리밍을 지원하지 않는다면 다음 줄 추가
+              // config.isStreaming = false;
+              break;
+
             default: // cohere
                 config.url = 'https://api.cohere.com/v1/chat';
                 config.headers = {
@@ -238,18 +266,25 @@ function extractStreamContent(parsed, model) {
     return parsed.choices?.[0]?.delta?.content || '';
   } else if (model.startsWith('gemini')) {
     return parsed.candidates?.[0]?.content?.parts?.map(part => part.text).join('') || '';
+  } else if (model === 'groq') {
+    return parsed.choices?.[0]?.delta?.content || '';
   } else {
     return parsed.event_type === 'text-generation' ? parsed.text : '';
   }
 }
 
+
 function extractResponseContent(data, model) {
   if (model.startsWith('gemini')) {
     return data.candidates?.[0]?.content?.parts?.map(part => part.text).join('') || '';
+  } else if (model === 'groq') {
+    return data.choices?.[0]?.message?.content || '';
   }
   console.error("Unexpected API response format:", data);
   return "API 응답 형식이 예상과 다릅니다.";
 }
+
+
 
 function showResult(result) {
   removeExistingOverlay();

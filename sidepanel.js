@@ -163,8 +163,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // API 설정 가져오기 함수
     async function getAPIConfig() {
         return new Promise((resolve) => {
-            chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'selectedModel', 'instructions'], function(result) {
-                if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey && !result.geminiflashApiKey) {
+            chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'groqApiKey', 'selectedModel', 'instructions'], function(result) {
+                if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey && !result.geminiflashApiKey && !result.groqApiKey) {
                     throw new Error("API 키를 설정해주세요.");
                 }
 
@@ -186,6 +186,28 @@ document.addEventListener('DOMContentLoaded', function() {
                             model: "mistral-small-latest",
                             messages: [{ role: "user", content: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.` }],
                             stream: true
+                        });
+                        break;
+                    case 'groq':
+                        config.url = 'https://api.groq.com/openai/v1/chat/completions';
+                        config.headers = {
+                            'Authorization': `Bearer ${result.groqApiKey.trim()}`,
+                            'Content-Type': 'application/json',
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            "messages": [
+                                ...conversationHistory.map(hist => ({
+                                    role: hist.role.toLowerCase() === "user" ? "user" : "assistant",
+                                    content: hist.message
+                                })),
+                                {
+                                    "role": "user",
+                                    "content": `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }
+                            ],
+                            "model": "llama-3.1-70b-versatile",
+                            "temperature": 0.7,
+                            "stream": true
                         });
                         break;
                     case 'gemini':
