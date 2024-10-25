@@ -1,3 +1,33 @@
+My ment
+
+제가 AI들의 도움을 받아 만들어본
+웹페이지 요약 크롬 확장입니다.
+Mistral
+Cohere
+Groq
+Gemini (pro) / Flash
+등을 사용 할 수 있습니다.
+모두 무료 API사용이 가능합니다.
+ollama는 표시되지만
+아직 오류가 해결되지 않아 작동하지 않습니다.
+
+"I've developed a Chrome extension for webpage summarization 
+with the help of various AI models, 
+
+including 
+
+Mistral, 
+Cohere, 
+Groq, 
+Gemini (pro), and Flash. 
+
+All of these models offer free API usage. 
+
+Although Ollama is listed, 
+it's currently not functional due to unresolved errors."
+
+
+
 For Korean
 
 # 웹페이지 요약 크롬 확장프로그램
