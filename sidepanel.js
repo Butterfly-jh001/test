@@ -163,11 +163,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // API 설정 가져오기 함수
     async function getAPIConfig() {
         return new Promise((resolve) => {
-            chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'groqApiKey', 'selectedModel', 'instructions'], function(result) {
-                if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey && !result.geminiflashApiKey && !result.groqApiKey) {
+            chrome.storage.sync.get([
+                'cohereApiKey', 
+                'mistralApiKey', 
+                'geminiApiKey', 
+                'geminiflashApiKey', 
+                'groqApiKey',
+                'cerebrasApiKey',  // Cerebras API 키 추가
+                'cerebrasModel',   // Cerebras 모델 추가
+                'selectedModel', 
+                'instructions'
+            ], function(result) {
+                if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey && 
+                    !result.geminiflashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
                     throw new Error("API 키를 설정해주세요.");
                 }
-
+    
                 const contextMessage = `현재 웹페이지의 내용: ${pageContent}`;
                 const config = {
                     model: result.selectedModel,
@@ -225,6 +236,51 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         config.isStreaming = false;
                         break;
+                        // getAPIConfig 함수 내의 switch 문에 Cerebras 케이스 추가
+                    case 'Cerebras':
+                        if (!result.cerebrasApiKey) {
+                            throw new Error("Cerebras API 키가 설정되지 않았습니다.");
+                        }
+                        
+                        config.url = 'https://api.cerebras.ai/v1/chat/completions';
+                        config.headers = {
+                            'Authorization': `Bearer ${result.cerebrasApiKey}`,
+                            'Content-Type': 'application/json'
+                        };
+                        
+                        // 대화 기록 길이 제한
+                        const maxHistoryLength = 5; // 최근 5개의 대화만 유지
+                        const limitedHistory = conversationHistory.slice(-maxHistoryLength);
+                        
+                        config.body = (msg) => {
+                            // 메시지 길이 체크
+                            const fullMessage = `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}`;
+                            const truncatedMessage = fullMessage.length > 7000 ? fullMessage.substring(0, 7000) : fullMessage;
+                            
+                            return JSON.stringify({
+                                model: result.cerebrasModel || 'llama3.1-8b',
+                                messages: [
+                                    {
+                                        role: "system",
+                                        content: config.instructions
+                                    },
+                                    ...limitedHistory.map(hist => ({
+                                        role: hist.role.toLowerCase() === "user" ? "user" : "assistant",
+                                        content: hist.message
+                                    })),
+                                    {
+                                        role: "user",
+                                        content: truncatedMessage
+                                    }
+                                ],
+                                stream: false,
+                                temperature: 0.7,
+                                max_completion_tokens: 1000,
+                                top_p: 0.95
+                            });
+                        };
+                        config.isStreaming = false;
+                        break;
                     default: // cohere
                         config.url = 'https://api.cohere.com/v1/chat';
                         config.headers = {
@@ -247,7 +303,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 비스트리밍 응답 추출 함수
     function extractNonStreamingResponse(data, model) {
-        if (model.startsWith('gemini')) {
+        if (model === 'Cerebras') {
+            if (data.choices && data.choices.length > 0 && data.choices[0].message) {
+                return data.choices[0].message.content;
+            }
+        } else if (model.startsWith('gemini')) {
             if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
                 return data.candidates[0].content.parts.map(part => part.text).join('');
             }

@@ -2,9 +2,12 @@ document.addEventListener('DOMContentLoaded', function() {
   var cohereApiKeyInput = document.getElementById('cohereApiKey');
   var mistralApiKeyInput = document.getElementById('mistralApiKey');
   var geminiApiKeyInput = document.getElementById('geminiApiKey');
-  var geminiflashApiKeyInput = document.getElementById('geminiflashApiKey'); // 추가
-
-  var groqApiKeyInput = document.getElementById('groqApiKey'); // 추가
+  var geminiflashApiKeyInput = document.getElementById('geminiflashApiKey');
+  var groqApiKeyInput = document.getElementById('groqApiKey');
+  var ollamaApiKeyInput = document.getElementById('ollamaApiKey');
+  var ollamaModelNameInput = document.getElementById('ollamaModelName');
+  var cerebrasApiKeyInput = document.getElementById('cerebrasApiKey');
+  var cerebrasModelRadios = document.querySelectorAll('input[name="cerebrasModel"]');
 
   var aiModelSelect = document.getElementById('aiModel');
   var saveButton = document.getElementById('save');
@@ -14,33 +17,42 @@ document.addEventListener('DOMContentLoaded', function() {
       cohereApiKeyInput.value = data.cohereApiKey || '';
       mistralApiKeyInput.value = data.mistralApiKey || '';
       geminiApiKeyInput.value = data.geminiApiKey || '';
-      geminiflashApiKeyInput.value = data.geminiflashApiKey || ''; // 추가
-
-      groqApiKeyInput.value = data.groqApiKey || ''; // 추가
+      geminiflashApiKeyInput.value = data.geminiflashApiKey || '';
+      groqApiKeyInput.value = data.groqApiKey || '';
+      ollamaApiKeyInput.value = data.ollamaApiKey || '';
+      ollamaModelNameInput.value = data.ollamaModelName || '';
+      cerebrasApiKeyInput.value = data.cerebrasApiKey || '';
       aiModelSelect.value = data.selectedModel || 'cohere';
+
+      cerebrasModelRadios.forEach(function(radio) {
+          radio.checked = data.cerebrasModel === radio.value;
+      });
+
       updateApiKeyVisibility(aiModelSelect.value);
-      console.log('Loaded settings:', data); // 디버깅을 위한 로그
   }
 
   function updateApiKeyVisibility(selectedModel) {
     const cohereSection = document.getElementById('cohereApiSection');
     const mistralSection = document.getElementById('mistralApiSection');
     const geminiSection = document.getElementById('geminiApiSection');
-    const geminiflashSection = document.getElementById('geminiflashApiSection'); // 추가
-    
-    const groqSection = document.getElementById('groqApiSection');  // 추가
+    const geminiflashSection = document.getElementById('geminiflashApiSection');
+    const groqSection = document.getElementById('groqApiSection');
+    const ollamaSection = document.getElementById('ollamaApiSection');
+    const ollamaModelNameSection = document.getElementById('ollamaModelNameSection');
+    const cerebrasSection = document.getElementById('cerebrasApiSection');
 
     cohereSection.style.display = selectedModel === 'cohere' ? 'block' : 'none';
     mistralSection.style.display = selectedModel === 'mistralSmall' ? 'block' : 'none';
     geminiSection.style.display = selectedModel === 'gemini' ? 'block' : 'none';
-    geminiflashSection.style.display = selectedModel === 'geminiflash' ? 'block' : 'none'; // 추가
-
-    groqSection.style.display = selectedModel === 'groq'? 'block': 'none';   // 추가
-
+    geminiflashSection.style.display = selectedModel === 'geminiflash' ? 'block' : 'none';
+    groqSection.style.display = selectedModel === 'groq' ? 'block' : 'none';
+    ollamaSection.style.display = selectedModel === 'ollama' ? 'block' : 'none';
+    ollamaModelNameSection.style.display = selectedModel === 'ollama' ? 'block' : 'none';
+    cerebrasSection.style.display = selectedModel === 'Cerebras' ? 'block' : 'none';
   }
 
   // 저장된 설정 불러오기
-  chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'groqApiKey', 'selectedModel'], function(data) { // 추가
+  chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'groqApiKey', 'ollamaApiKey', 'ollamaModelName', 'selectedModel', 'cerebrasApiKey', 'cerebrasModel'], function(data) {
       updateUI(data);
   });
 
@@ -49,23 +61,32 @@ document.addEventListener('DOMContentLoaded', function() {
     var cohereApiKey = cohereApiKeyInput.value.trim();
     var mistralApiKey = mistralApiKeyInput.value.trim();
     var geminiApiKey = geminiApiKeyInput.value.trim();
-    var geminiflashApiKey = geminiflashApiKeyInput.value.trim(); // 추가
-
-    var groqApiKey = groqApiKeyInput.value.trim(); // 추가
-
+    var geminiflashApiKey = geminiflashApiKeyInput.value.trim();
+    var groqApiKey = groqApiKeyInput.value.trim();
+    var ollamaApiKey = ollamaApiKeyInput.value.trim();
+    var ollamaModelName = ollamaModelNameInput.value.trim();
+    var cerebrasApiKey = cerebrasApiKeyInput.value.trim();
     var selectedModel = aiModelSelect.value;
+    var cerebrasModel;
+
+    cerebrasModelRadios.forEach(function(radio) {
+        if (radio.checked) {
+            cerebrasModel = radio.value;
+        }
+    });
 
     var dataToSave = {
         cohereApiKey: cohereApiKey,
         mistralApiKey: mistralApiKey,
         geminiApiKey: geminiApiKey,
-        geminiflashApiKey: geminiflashApiKey, // 추가
-
-        groqApiKey: groqApiKey, // 추가
-        selectedModel: selectedModel
+        geminiflashApiKey: geminiflashApiKey,
+        groqApiKey: groqApiKey,
+        ollamaApiKey: ollamaApiKey,
+        ollamaModelName: ollamaModelName,
+        selectedModel: selectedModel,
+        cerebrasApiKey: cerebrasApiKey,
+        cerebrasModel: cerebrasModel
     };
-
-      console.log('Saving settings:', dataToSave); // 저장 전 로그
 
       chrome.storage.sync.set(dataToSave, function() {
           if (chrome.runtime.lastError) {
@@ -73,7 +94,6 @@ document.addEventListener('DOMContentLoaded', function() {
               console.error('Error saving settings:', chrome.runtime.lastError);
           } else {
               status.textContent = '설정이 저장되었습니다.';
-              console.log('Saved settings:', dataToSave); // 저장 후 로그
               setTimeout(function() {
                   status.textContent = '';
               }, 3000);
@@ -85,7 +105,6 @@ document.addEventListener('DOMContentLoaded', function() {
   aiModelSelect.addEventListener('change', function() {
       updateApiKeyVisibility(this.value);
   });
-
 
   // instruction 관련 요소 가져오기
   const instructionInput = document.getElementById('instructionInput');
@@ -143,6 +162,5 @@ document.addEventListener('DOMContentLoaded', function() {
       instructionList.appendChild(option);
     });
   });
-
 
 });

@@ -68,6 +68,8 @@
             <option value="gemini">Gemini</option>
             <option value="geminiflash">Gemini Flash</option>
             <option value="groq">Groq Llama 3.1 70B</option>
+            <option value="ollama">Ollama API</option>
+            <option value="Cerebras">Cerebras</option>
         </select>
         <div id="cohereApiSection">
             <label for="cohereApiKey">Cohere API 키:</label>
@@ -89,15 +91,32 @@
             <label for="groqApiKey">Groq Llama 3.1 70B API 키:</label>
             <input type="text" id="groqApiKey" placeholder="Groq Llama 3.1 70B API 키를 입력하세요">
         </div>
-
+        <div id="cerebrasApiSection">  
+            <label for="cerebrasApiKey">Cerebras API 키:</label>
+            <input type="text" id="cerebrasApiKey" placeholder="Cerebras API 키를 입력하세요">
+            <label for="cerebrasModel">Cerebras 모델 선택:</label>
+            <div>
+                <label for="llama3.1-8b"><input type="radio" id="llama3.1-8b" name="cerebrasModel" value="llama3.1-8b">llama3.1-8b</label>
+            </div>
+            <div>
+                <label for="llama3.1-70b"><input type="radio" id="llama3.1-70b" name="cerebrasModel" value="llama3.1-70b">llama3.1-70b</label>
+            </div>
+        </div>
+        <div id="ollamaApiSection">
+            <label for="ollamaApiKey">Ollama API 키:</label>
+            <input type="text" id="ollamaApiKey" style="display:none;" placeholder="Ollama API 키를 입력하세요">
+            <div id="ollamaModelNameSection" style="display: none;">
+                <label for="ollamaModelName">Ollama 모델 이름:</label>
+                <input type="text" id="ollamaModelName" placeholder="Ollama 모델 이름을 입력하세요">
+            </div>
+        </div>
         <button id="save">저장</button> <p id="status"></p>
-
         <label for="instructionInput">Instruction:</label>
         <input type="text" id="instructionInput" placeholder="Instruction을 입력하세요">
         <button id="addInstruction">Instruction 추가</button>
         <select id="instructionList"></select>
         <button id="deleteInstruction">Instruction 삭제</button>
     </div>
-    <script src="options.js"></script> 
+    <script src="options.js"></script>
 </body>
 </html>
