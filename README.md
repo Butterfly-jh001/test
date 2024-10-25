@@ -2,12 +2,15 @@ My writing
 
 제가 AI들의 도움을 받아 만들어본
 웹페이지 요약 크롬 확장입니다.
+
 Mistral
 Cohere
 Groq
 Gemini (pro) / Flash
 등을 사용 할 수 있습니다.
+
 모두 무료 API사용이 가능합니다.
+
 ollama는 표시되지만
 아직 오류가 해결되지 않아 작동하지 않습니다.
 
