@@ -109,34 +109,71 @@ async function sendToAI(text, instruction) {
       showLoading(combinedInstruction);
       updateProgress("API에 요청을 보내는 중...");
 
-      // Cerebras API 키 체크
-      if (!result.cerebrasApiKey && result.selectedModel === 'Cerebras') {
-          throw new Error("Cerebras API 키가 설정되지 않았습니다.");
-      }
+      // 모델별 특별 처리
+      switch (result.selectedModel) {
+          case 'groq':
+              // Groq 특별 처리
+              if (text.length > 3000) {
+                  updateProgress("텍스트가 너무 깁니다. 분할 처리를 시작합니다...");
+                  const chunks = splitText(text, 2500);
+                  const chunkToProcess = chunks[0];
+                  updateProgress("텍스트 처리 중...");
+                  
+                  const apiConfig = await getAPIConfig(result, instruction, chunkToProcess);
+                  const response = await fetch(apiConfig.url, {
+                      method: 'POST',
+                      headers: apiConfig.headers,
+                      body: apiConfig.body
+                  });
 
-      // Cerebras의 경우 텍스트 길이 제한 처리
-      if (result.selectedModel === 'Cerebras') {
-          const maxLength = 8000;
-          if (text.length > maxLength) {
-              const chunks = splitText(text, 7000);
-              let responses = [];
-              
-              for (let i = 0; i < chunks.length; i++) {
-                  updateProgress(`청크 처리 중 ${i + 1}/${chunks.length}`);
-                  const chunk = chunks[i];
-                  const chunkResponse = await processSingleChunk(chunk, instruction, result);
-                  responses.push(chunkResponse);
+                  if (!response.ok) {
+                      throw new Error(`API 요청 실패 (${response.status}): ${await response.text()}`);
+                  }
+
+                  const aiResponse = await handleStreamingResponse(response, 'groq', updateAIMessage);
+                  showResult(`참고: 텍스트가 길어 일부만 처리되었습니다.\n\n${aiResponse}`);
+                  addModelNameToLastMessage('groq');
+                  return;
               }
-              
-              const combinedResponse = responses.join('\n\n');
-              showResult(combinedResponse);
-              return;
-          }
+              break;
+
+          case 'Cerebras':
+              // Cerebras 기존 처리 방식 유지
+              if (text.length > 8000) {
+                  const chunks = splitText(text, 7000);
+                  let responses = [];
+                  
+                  for (let i = 0; i < chunks.length; i++) {
+                      updateProgress(`청크 처리 중 ${i + 1}/${chunks.length}`);
+                      const chunkResponse = await processSingleChunk(chunks[i], instruction, result);
+                      responses.push(chunkResponse);
+                  }
+                  
+                  showResult(responses.join('\n\n'));
+                  addModelNameToLastMessage('Cerebras');
+                  return;
+              }
+              break;
+
+          case 'gemini':
+          case 'geminiflash':
+              // Gemini 기존 처리 방식 유지
+              // 특별한 제한이나 처리 없음
+              break;
+
+          case 'mistralSmall':
+              // Mistral 기존 처리 방식 유지
+              // 특별한 제한이나 처리 없음
+              break;
+
+          default: // cohere
+              // Cohere 기존 처리 방식 유지
+              // 특별한 제한이나 처리 없음
+              break;
       }
 
+      // 일반적인 API 처리 (모든 모델 공통)
       const apiConfig = await getAPIConfig(result, combinedInstruction, text);
-      console.log('Sending request to API...');
-
       const response = await fetch(apiConfig.url, {
           method: 'POST',
           headers: apiConfig.headers,
@@ -144,8 +181,7 @@ async function sendToAI(text, instruction) {
       });
 
       if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`API 요청 실패 (${response.status}): ${errorText}`);
+          throw new Error(`API 요청 실패 (${response.status}): ${await response.text()}`);
       }
 
       let aiResponse;
@@ -317,25 +353,30 @@ async function getAPIConfig(result, instruction, text) {
                 });
                 config.isStreaming = false;
                 break;
-            case 'groq':
-              config.url = 'https://api.groq.com/openai/v1/chat/completions';
-              config.headers = {
-                  'Authorization': `Bearer ${result.groqApiKey.trim()}`,
-                  'Content-Type': 'application/json',
-              };
-              config.body = JSON.stringify({
-                  "messages": [
-                      {
-                          "content": `${config.instructions}\n${contextMessage}\n\n${instruction}`,
-                          "role": "user"
-                      }
-                  ],
-                  "model": "llama-3.1-70b-versatile",
-                  "stream": config.isStreaming // Groq API가 스트리밍을 지원하면 추가
-              });
-              // Groq API가 스트리밍을 지원하지 않는다면 다음 줄 추가
-              // config.isStreaming = false;
-              break;
+                case 'groq':
+                  // Groq 특별 설정
+                  config.url = 'https://api.groq.com/openai/v1/chat/completions';
+                  config.headers = {
+                      'Authorization': `Bearer ${result.groqApiKey.trim()}`,
+                      'Content-Type': 'application/json',
+                  };
+                  config.body = JSON.stringify({
+                      "messages": [
+                          {
+                              "role": "system",
+                              "content": "Please be concise and focused in your responses."
+                          },
+                          {
+                              "content": `${config.instructions}\n${text}\n\n${instruction}`,
+                              "role": "user"
+                          }
+                      ],
+                      "model": "llama-3.1-70b-versatile",
+                      "stream": true,
+                      "max_tokens": 1000,
+                      "temperature": 0.7
+                  });
+                  break;
               case 'Cerebras':
                 const maxChunkLength = 7000; // 안전한 길이로 설정
                 const chunks = splitText(`${contextMessage}\n\n${instruction}`, maxChunkLength);
