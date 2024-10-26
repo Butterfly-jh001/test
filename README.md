@@ -11,6 +11,8 @@ Groq
 
 Gemini (pro) / Flash
 
+cerebras
+
 등을 사용 할 수 있습니다.
 
 모두 무료 API사용이 가능합니다.
