@@ -66,9 +66,17 @@ For Korean
 1. 저장소 클론 또는 다운로드
 2. 크롬 브라우저에서 `chrome://extensions` 접속
 3. 우측 상단의 '개발자 모드' 활성화
-4. '압축해제된 확장 프로그램을 로드합니다' 클릭
-5. 다운로드한 프로젝트 폴더 선택
-6. 설치 완료
+4. 아래 파일들을 원하는 이름의 폴더를 만들어 넣어줍니다.
+background.js
+content.js
+manifest.json
+options.html
+options.js
+sidepanel.html
+sidepanel.js
+
+7. "압축해제된 확장프로그램을 로드합니다." 클릭 후 폴더 선택
+8. 로 완료
 
 ## 💡 사용 방법
 1. 웹페이지에서 마우스 우클릭
