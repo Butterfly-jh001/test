@@ -68,11 +68,17 @@ For Korean
 3. 우측 상단의 '개발자 모드' 활성화
 4. 아래 파일들을 원하는 이름의 폴더를 만들어 넣어줍니다.
 background.js
+
 content.js
+
 manifest.json
+
 options.html
+
 options.js
+
 sidepanel.html
+
 sidepanel.js
 
 7. "압축해제된 확장프로그램을 로드합니다." 클릭 후 폴더 선택
