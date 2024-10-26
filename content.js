@@ -114,34 +114,28 @@ async function sendToAI(text, instruction) {
           throw new Error("Cerebras API 키가 설정되지 않았습니다.");
       }
 
-      // 텍스트 길이 체크 및 처리
+      // Cerebras의 경우 텍스트 길이 제한 처리
       if (result.selectedModel === 'Cerebras') {
-          if (text.length > 8000) {
-              updateProgress("긴 텍스트를 처리하는 중...");
+          const maxLength = 8000;
+          if (text.length > maxLength) {
               const chunks = splitText(text, 7000);
-              let combinedResponse = '';
+              let responses = [];
               
-              for (const chunk of chunks) {
+              for (let i = 0; i < chunks.length; i++) {
+                  updateProgress(`청크 처리 중 ${i + 1}/${chunks.length}`);
+                  const chunk = chunks[i];
                   const chunkResponse = await processSingleChunk(chunk, instruction, result);
-                  combinedResponse += chunkResponse + ' ';
-                  updateProgress(`${chunks.indexOf(chunk) + 1}/${chunks.length} 청크 처리 완료`);
+                  responses.push(chunkResponse);
               }
               
-              showResult(combinedResponse.trim());
+              const combinedResponse = responses.join('\n\n');
+              showResult(combinedResponse);
               return;
           }
       }
 
-      updateProgress("작업을 시작합니다...");
-
       const apiConfig = await getAPIConfig(result, combinedInstruction, text);
-      
-      // 디버깅을 위한 요청 내용 로깅
-      console.log('API Request Config:', {
-          url: apiConfig.url,
-          headers: {...apiConfig.headers, Authorization: '[HIDDEN]'},
-          body: JSON.parse(apiConfig.body)
-      });
+      console.log('Sending request to API...');
 
       const response = await fetch(apiConfig.url, {
           method: 'POST',
@@ -151,14 +145,6 @@ async function sendToAI(text, instruction) {
 
       if (!response.ok) {
           const errorText = await response.text();
-          console.error('API Error Response:', errorText);
-          
-          // 컨텍스트 길이 초과 에러 특별 처리
-          if (errorText.includes('context_length_exceeded')) {
-              updateProgress("텍스트가 너무 깁니다. 축소된 버전으로 다시 시도합니다...");
-              return await sendToAI(text.substring(0, Math.floor(text.length * 0.8)), instruction);
-          }
-          
           throw new Error(`API 요청 실패 (${response.status}): ${errorText}`);
       }
 
@@ -174,19 +160,8 @@ async function sendToAI(text, instruction) {
       addModelNameToLastMessage(result.selectedModel);
 
   } catch (error) {
-      console.error('Error details:', error);
-      
-      // 사용자 친화적인 에러 메시지 표시
-      let errorMessage = "API 요청 중 오류가 발생했습니다: ";
-      if (error.message.includes('API key')) {
-          errorMessage += "API 키가 올바르지 않거나 설정되지 않았습니다.";
-      } else if (error.message.includes('context_length_exceeded')) {
-          errorMessage += "텍스트가 너무 깁니다. 더 짧은 텍스트로 시도해주세요.";
-      } else {
-          errorMessage += error.message;
-      }
-      
-      showResult(errorMessage);
+      console.error('Error in sendToAI:', error);
+      showResult(`오류가 발생했습니다: ${error.message}`);
   }
 }
 
@@ -267,6 +242,38 @@ async function getAPIConfig(result, instruction, text) {
           isStreaming: true,
           instructions: result.instructions ? result.instructions.join('\n') : ''
       };
+
+      // Cerebras API 설정
+      if (result.selectedModel === 'Cerebras') {
+          config.url = 'https://api.cerebras.ai/v1/chat/completions';
+          config.headers = {
+              'Authorization': `Bearer ${result.cerebrasApiKey}`,
+              'Content-Type': 'application/json'
+          };
+          
+          const selectedModel = result.cerebrasModel || 'llama3.1-8b';
+          
+          config.body = JSON.stringify({
+              model: selectedModel,
+              messages: [
+                  {
+                      role: "system",
+                      content: config.instructions
+                  },
+                  {
+                      role: "user",
+                      content: `${contextMessage}\n\n${instruction}`
+                  }
+              ],
+              stream: false,
+              temperature: 0.7,
+              max_completion_tokens: 2000,
+              top_p: 0.95
+          });
+          
+          // Cerebras는 스트리밍을 비활성화
+          config.isStreaming = false;
+      }
 
         switch (result.selectedModel) {
             case 'mistralSmall':
@@ -395,19 +402,27 @@ function extractStreamContent(parsed, model) {
 
 function extractResponseContent(data, model) {
   if (model === 'Cerebras') {
-      // Cerebras API 응답 형식에 맞게 처리
-      if (data.choices && data.choices.length > 0 && data.choices[0].message) {
-          return data.choices[0].message.content;
+      if (data.choices && data.choices.length > 0) {
+          // Cerebras API가 스트리밍 모드가 아닐 때
+          if (data.choices[0].message) {
+              return data.choices[0].message.content;
+          }
+          // 스트리밍 모드일 때
+          if (data.choices[0].delta && data.choices[0].delta.content) {
+              return data.choices[0].delta.content;
+          }
       }
-      throw new Error("Unexpected Cerebras API response format");
-  } else if (model.startsWith('gemini')) {
+      console.error("Unexpected Cerebras API response format:", data);
+      return "Cerebras API 응답을 처리할 수 없습니다.";
+  }
+  // 다른 모델들의 처리 로직은 유지
+  if (model.startsWith('gemini')) {
       return data.candidates?.[0]?.content?.parts?.map(part => part.text).join('') || '';
   } else if (model === 'groq') {
       return data.choices?.[0]?.message?.content || '';
   } else if (model === 'mistralSmall') {
       return data.choices?.[0]?.message?.content || '';
   } else {
-      // cohere 또는 기타 모델의 경우
       if (data.generations && data.generations.length > 0) {
           return data.generations[0].text;
       }
