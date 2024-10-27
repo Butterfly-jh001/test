@@ -1,0 +1,43 @@
+{
+    "appName": {
+      "message": "웹페이지 요약 및 번역 도우미",
+      "description": "확장 프로그램의 이름"
+    },
+    "appDesc": {
+      "message": "웹페이지 요약 및 번역 기능을 제공하는 크롬 확장 프로그램",
+      "description": "확장 프로그램의 설명"
+    },
+    "summarizeFullPage": {
+      "message": "전체 페이지 요약"
+    },
+    "fullSummary": {
+      "message": "Full 요약"
+    },
+    "mediumSummary": {
+      "message": "보고서형식 요약"
+    },
+    "shortSummary": {
+      "message": "간단한 요약"
+    },
+    "summarizeSelection": {
+      "message": "선택 영역 요약"
+    },
+    "translateToEnglish": {
+      "message": "영어로 번역"
+    },
+    "translateToKorean": {
+      "message": "한글로 번역"
+    },
+    "enterMessage": {
+      "message": "메시지를 입력하세요..."
+    },
+    "send": {
+      "message": "전송"
+    },
+    "copy": {
+      "message": "복사"
+    },
+    "generating": {
+      "message": "답변을 생성 중입니다..."
+    }
+  }
