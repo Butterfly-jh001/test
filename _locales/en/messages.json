@@ -1,0 +1,43 @@
+{
+    "appName": {
+      "message": "Webpage Summary and Translation Assistant",
+      "description": "The name of the extension"
+    },
+    "appDesc": {
+      "message": "Chrome extension providing webpage summary and translation features",
+      "description": "The description of the extension"
+    },
+    "summarizeFullPage": {
+      "message": "Summarize Full Page"
+    },
+    "fullSummary": {
+      "message": "Full Summary"
+    },
+    "mediumSummary": {
+      "message": "Report Style Summary"
+    },
+    "shortSummary": {
+      "message": "Brief Summary"
+    },
+    "summarizeSelection": {
+      "message": "Summarize Selection"
+    },
+    "translateToEnglish": {
+      "message": "Translate to English"
+    },
+    "translateToKorean": {
+      "message": "Translate to Korean"
+    },
+    "enterMessage": {
+      "message": "Enter your message..."
+    },
+    "send": {
+      "message": "Send"
+    },
+    "copy": {
+      "message": "Copy"
+    },
+    "generating": {
+      "message": "Generating response..."
+    }
+  }
