@@ -1,5 +1,6 @@
 {
-    "manifest_version": 3,
+  "manifest_version": 3,
+  "default_locale": "ko",
     "name": "웹페이지 요약 및 번역 도우미",
     "version": "1.0",
     "description": "웹페이지 요약 및 번역 기능을 제공하는 크롬 확장 프로그램",

@@ -13,6 +13,78 @@ document.addEventListener('DOMContentLoaded', function() {
   var saveButton = document.getElementById('save');
   var status = document.getElementById('status');
 
+  // 언어 선택 요소
+const languageSelect = document.getElementById('language');
+
+// 저장된 언어 설정 불러오기
+chrome.storage.sync.get('language', function(data) {
+    if (data.language) {
+        languageSelect.value = data.language;
+    }
+});
+
+// 언어 변경 시 저장
+languageSelect.addEventListener('change', function() {
+    chrome.storage.sync.set({ language: this.value }, function() {
+        // 언어 변경 후 페이지 새로고침
+        location.reload();
+    });
+});
+
+// 페이지 로드 시 언어 적용
+function applyLanguage() {
+    chrome.storage.sync.get('language', function(data) {
+        const lang = data.language || 'ko'; // 기본값은 한국어
+        
+        const translations = {
+            ko: {
+                title: 'AI 요약 확장 프로그램 설정',
+                aiModelLabel: 'AI 모델 선택:',
+                saveButton: '저장',
+                apiKeyPlaceholder: 'API 키를 입력하세요',
+                instructionLabel: 'Instruction:',
+                instructionPlaceholder: 'Instruction을 입력하세요',
+                addInstruction: 'Instruction 추가',
+                deleteInstruction: 'Instruction 삭제',
+                languageLabel: '언어 설정 (Language Setting):',
+                statusSaved: '설정이 저장되었습니다.'
+            },
+            en: {
+                title: 'AI Summary Extension Settings',
+                aiModelLabel: 'Select AI Model:',
+                saveButton: 'Save',
+                apiKeyPlaceholder: 'Enter API Key',
+                instructionLabel: 'Instruction:',
+                instructionPlaceholder: 'Enter Instruction',
+                addInstruction: 'Add Instruction',
+                deleteInstruction: 'Delete Instruction',
+                languageLabel: 'Language Setting (언어 설정):',
+                statusSaved: 'Settings saved successfully.'
+            }
+        };
+
+        // 텍스트 요소들 업데이트
+        document.title = translations[lang].title;
+        document.querySelector('h1').textContent = translations[lang].title;
+        document.querySelector('label[for="aiModel"]').textContent = translations[lang].aiModelLabel;
+        document.querySelector('#save').textContent = translations[lang].saveButton;
+        document.querySelector('label[for="instructionInput"]').textContent = translations[lang].instructionLabel;
+        document.querySelector('#instructionInput').placeholder = translations[lang].instructionPlaceholder;
+        document.querySelector('#addInstruction').textContent = translations[lang].addInstruction;
+        document.querySelector('#deleteInstruction').textContent = translations[lang].deleteInstruction;
+        document.querySelector('label[for="language"]').textContent = translations[lang].languageLabel;
+
+        // API 키 입력 필드 플레이스홀더 업데이트
+        const apiInputs = document.querySelectorAll('input[type="text"][id$="ApiKey"]');
+        apiInputs.forEach(input => {
+            input.placeholder = translations[lang].apiKeyPlaceholder;
+        });
+    });
+}
+
+// 페이지 로드 시 언어 적용
+applyLanguage();
+
   function updateUI(data) {
       cohereApiKeyInput.value = data.cohereApiKey || '';
       mistralApiKeyInput.value = data.mistralApiKey || '';
