@@ -67,6 +67,7 @@ For Korean
 2. 크롬 브라우저에서 `chrome://extensions` 접속
 3. 우측 상단의 '개발자 모드' 활성화
 4. 아래 파일들을 원하는 이름의 폴더를 만들어 넣어줍니다.
+
 background.js
 
 content.js
