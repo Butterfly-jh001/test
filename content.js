@@ -90,115 +90,170 @@ function removeExistingOverlay() {
   }
 }
 
+// 네이버 뉴스 본문 자동 선택 함수 추가
+function autoSelectNewsContent() {
+    // 네이버 뉴스 본문 요소 선택자
+    const newsContentSelector = '#newsct_article';
+    const newsContent = document.querySelector(newsContentSelector);
+    
+    if (newsContent) {
+        // 기존 선택 초기화
+        window.getSelection().removeAllRanges();
+        
+        // 새로운 Range 객체 생성
+        const range = document.createRange();
+        range.selectNodeContents(newsContent);
+        
+        // 선택 영역 설정
+        const selection = window.getSelection();
+        selection.addRange(range);
+        
+        return true;
+    }
+    return false;
+}
+
 async function sendToAI(text, instruction) {
-  try {
-      const result = await chrome.storage.sync.get([
-          'cohereApiKey',
-          'mistralApiKey',
-          'geminiApiKey',
-          'geminiflashApiKey',
-          'groqApiKey',
-          'cerebrasApiKey',
-          'cerebrasModel',
-          'selectedModel',
-          'instructions'
-      ]);
+    try {
+        const result = await chrome.storage.sync.get([
+            'cohereApiKey', 'mistralApiKey', 'geminiApiKey', 
+            'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey', 
+            'cerebrasModel', 'selectedModel', 'instructions'
+        ]);
 
-      const instructions = result.instructions || [];
-      const combinedInstruction = instructions.join('\n') + '\n' + instruction;
-      showLoading(combinedInstruction);
-      updateProgress("API에 요청을 보내는 중...");
+        const instructions = result.instructions || [];
+        const combinedInstruction = instructions.join('\n') + '\n' + instruction;
+        showLoading(combinedInstruction);
+        updateProgress("API에 요청을 보내는 중...");
 
-      // 모델별 특별 처리
-      switch (result.selectedModel) {
-          case 'groq':
-              // Groq 특별 처리
-              if (text.length > 3000) {
-                  updateProgress("텍스트가 너무 깁니다. 분할 처리를 시작합니다...");
-                  const chunks = splitText(text, 2500);
-                  const chunkToProcess = chunks[0];
-                  updateProgress("텍스트 처리 중...");
-                  
-                  const apiConfig = await getAPIConfig(result, instruction, chunkToProcess);
-                  const response = await fetch(apiConfig.url, {
-                      method: 'POST',
-                      headers: apiConfig.headers,
-                      body: apiConfig.body
-                  });
+        // Gemini와 Gemini Flash 모델 처리
+        if (result.selectedModel === 'gemini' || result.selectedModel === 'geminiflash') {
+            try {
+                const apiConfig = await getAPIConfig(result, instruction, text);
+                const response = await fetch(apiConfig.url, {
+                    method: 'POST',
+                    headers: apiConfig.headers,
+                    body: apiConfig.body
+                });
 
-                  if (!response.ok) {
-                      throw new Error(`API 요청 실패 (${response.status}): ${await response.text()}`);
-                  }
+                if (!response.ok) {
+                    throw new Error(`API 요청 실패 (${response.status})`);
+                }
 
-                  const aiResponse = await handleStreamingResponse(response, 'groq', updateAIMessage);
-                  showResult(`참고: 텍스트가 길어 일부만 처리되었습니다.\n\n${aiResponse}`);
-                  addModelNameToLastMessage('groq');
-                  return;
-              }
-              break;
+                const data = await response.json();
+                
+                // API 차단 또는 오류 발생 시
+                if (data.error || !data.candidates || data.candidates.length === 0) {
+                    // 네이버 뉴스 본문 자동 선택
+                    const newsContent = document.querySelector('#newsct_article');
+                    if (newsContent) {
+                        window.getSelection().removeAllRanges();
+                        const range = document.createRange();
+                        range.selectNodeContents(newsContent);
+                        window.getSelection().addRange(range);
+                        
+                        const selectedText = window.getSelection().toString();
+                        if (selectedText) {
+                            // 선택된 텍스트로 재시도
+                            sendToAI(selectedText, instruction);
+                            return;
+                        }
+                    }
+                    throw new Error('Gemini API 처리 중 오류가 발생했습니다.');
+                }
 
-          case 'Cerebras':
-              // Cerebras 기존 처리 방식 유지
-              if (text.length > 8000) {
-                  const chunks = splitText(text, 7000);
-                  let responses = [];
-                  
-                  for (let i = 0; i < chunks.length; i++) {
-                      updateProgress(`청크 처리 중 ${i + 1}/${chunks.length}`);
-                      const chunkResponse = await processSingleChunk(chunks[i], instruction, result);
-                      responses.push(chunkResponse);
-                  }
-                  
-                  showResult(responses.join('\n\n'));
-                  addModelNameToLastMessage('Cerebras');
-                  return;
-              }
-              break;
+                const aiResponse = extractResponseContent(data, result.selectedModel);
+                showResult(aiResponse);
+                addModelNameToLastMessage(result.selectedModel);
 
-          case 'gemini':
-          case 'geminiflash':
-              // Gemini 기존 처리 방식 유지
-              // 특별한 제한이나 처리 없음
-              break;
+            } catch (geminiError) {
+                console.error('Gemini API 오류:', geminiError);
+                // 자동 본문 선택 재시도
+                const newsContent = document.querySelector('#newsct_article');
+                if (newsContent) {
+                    window.getSelection().removeAllRanges();
+                    const range = document.createRange();
+                    range.selectNodeContents(newsContent);
+                    window.getSelection().addRange(range);
+                    
+                    const selectedText = window.getSelection().toString();
+                    if (selectedText) {
+                        sendToAI(selectedText, instruction);
+                    } else {
+                        showResult("뉴스 본문을 찾을 수 없습니다. 직접 본문을 선택해주세요.");
+                    }
+                } else {
+                    showResult(`오류가 발생했습니다: ${geminiError.message}`);
+                }
+            }
+        } else {
+            // 다른 모델들의 처리 로직
+            switch (result.selectedModel) {
+                case 'groq':
+                    if (text.length > 3000) {
+                        updateProgress("텍스트가 너무 깁니다. 분할 처리를 시작합니다...");
+                        const chunks = splitText(text, 2500);
+                        const chunkToProcess = chunks[0];
+                        updateProgress("텍스트 처리 중...");
+                        const apiConfig = await getAPIConfig(result, instruction, chunkToProcess);
+                        const response = await fetch(apiConfig.url, {
+                            method: 'POST',
+                            headers: apiConfig.headers,
+                            body: apiConfig.body
+                        });
+                        if (!response.ok) {
+                            throw new Error(`API 요청 실패 (${response.status}): ${await response.text()}`);
+                        }
+                        const aiResponse = await handleStreamingResponse(response, 'groq', updateAIMessage);
+                        showResult(`참고: 텍스트가 길어 일부만 처리되었습니다.\n\n${aiResponse}`);
+                        addModelNameToLastMessage('groq');
+                        return;
+                    }
+                    break;
 
-          case 'mistralSmall':
-              // Mistral 기존 처리 방식 유지
-              // 특별한 제한이나 처리 없음
-              break;
+                case 'Cerebras':
+                    if (text.length > 8000) {
+                        const chunks = splitText(text, 7000);
+                        let responses = [];
+                        for (let i = 0; i < chunks.length; i++) {
+                            updateProgress(`청크 처리 중 ${i + 1}/${chunks.length}`);
+                            const chunkResponse = await processSingleChunk(chunks[i], instruction, result);
+                            responses.push(chunkResponse);
+                        }
+                        showResult(responses.join('\n\n'));
+                        addModelNameToLastMessage('Cerebras');
+                        return;
+                    }
+                    break;
+            }
 
-          default: // cohere
-              // Cohere 기존 처리 방식 유지
-              // 특별한 제한이나 처리 없음
-              break;
-      }
+            // 일반적인 API 처리
+            const apiConfig = await getAPIConfig(result, combinedInstruction, text);
+            const response = await fetch(apiConfig.url, {
+                method: 'POST',
+                headers: apiConfig.headers,
+                body: apiConfig.body
+            });
 
-      // 일반적인 API 처리 (모든 모델 공통)
-      const apiConfig = await getAPIConfig(result, combinedInstruction, text);
-      const response = await fetch(apiConfig.url, {
-          method: 'POST',
-          headers: apiConfig.headers,
-          body: apiConfig.body
-      });
+            if (!response.ok) {
+                throw new Error(`API 요청 실패 (${response.status}): ${await response.text()}`);
+            }
 
-      if (!response.ok) {
-          throw new Error(`API 요청 실패 (${response.status}): ${await response.text()}`);
-      }
+            let aiResponse;
+            if (apiConfig.isStreaming) {
+                aiResponse = await handleStreamingResponse(response, result.selectedModel, updateAIMessage);
+            } else {
+                const data = await response.json();
+                aiResponse = extractResponseContent(data, result.selectedModel);
+            }
 
-      let aiResponse;
-      if (apiConfig.isStreaming) {
-          aiResponse = await handleStreamingResponse(response, result.selectedModel, updateAIMessage);
-      } else {
-          const data = await response.json();
-          aiResponse = extractResponseContent(data, result.selectedModel);
-      }
-
-      showResult(aiResponse);
-      addModelNameToLastMessage(result.selectedModel);
-
-  } catch (error) {
-      console.error('Error in sendToAI:', error);
-      showResult(`오류가 발생했습니다: ${error.message}`);
-  }
+            showResult(aiResponse);
+            addModelNameToLastMessage(result.selectedModel);
+        }
+    } catch (error) {
+        console.error('Error in sendToAI:', error);
+        showResult(`오류가 발생했습니다: ${error.message}`);
+    }
 }
 
 // 청크 처리를 위한 헬퍼 함수
@@ -639,8 +694,8 @@ function getPageContent() {
 }
 
 // 초기 페이지 컨텐츠 업데이트 및 주기적 업데이트 설정
-updatePageContent();
-setInterval(updatePageContent, 5000);
+//updatePageContent();
+//setInterval(updatePageContent, 5000);
 });
 
 function splitText(text, maxLength) {
