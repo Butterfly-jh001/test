@@ -113,18 +113,8 @@ function autoSelectNewsContent() {
     return false;
 }
 
-// 전역 변수로 재시도 플래그 추가
-// 전역 변수로 재시도 플래그 추가
-let retryAttempted = false;
-
 async function sendToAI(text, instruction) {
     try {
-        // 이미 재시도했던 경우 즉시 종료
-        if (retryAttempted) {
-            showResult("이전 요청이 실패했습니다. 다시 시도하려면 다른 AI를 선택해주세요.");
-            return;
-        }
-
         const result = await chrome.storage.sync.get([
             'cohereApiKey', 'mistralApiKey', 'geminiApiKey', 
             'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey', 
@@ -136,6 +126,7 @@ async function sendToAI(text, instruction) {
         showLoading(combinedInstruction);
         updateProgress("API에 요청을 보내는 중...");
 
+        // Gemini와 Gemini Flash 모델 처리
         if (result.selectedModel === 'gemini' || result.selectedModel === 'geminiflash') {
             try {
                 const apiConfig = await getAPIConfig(result, instruction, text);
@@ -151,37 +142,9 @@ async function sendToAI(text, instruction) {
 
                 const data = await response.json();
                 
+                // API 차단 또는 오류 발생 시
                 if (data.error || !data.candidates || data.candidates.length === 0) {
-                    if (!retryAttempted) {
-                        retryAttempted = true;
-                        const newsContent = document.querySelector('#newsct_article');
-                        if (newsContent) {
-                            window.getSelection().removeAllRanges();
-                            const range = document.createRange();
-                            range.selectNodeContents(newsContent);
-                            window.getSelection().addRange(range);
-                            
-                            const selectedText = window.getSelection().toString();
-                            if (selectedText) {
-                                await sendToAI(selectedText, instruction);
-                            } else {
-                                showResult("뉴스 본문을 찾을 수 없습니다. 직접 본문을 선택해주세요.");
-                            }
-                            return;
-                        }
-                    }
-                    throw new Error('요약 작업을 수행할 수 없습니다. API 접근이 제한되었습니다.');
-                }
-
-                const aiResponse = extractResponseContent(data, result.selectedModel);
-                showResult(aiResponse);
-                addModelNameToLastMessage(result.selectedModel);
-                retryAttempted = false;
-
-            } catch (geminiError) {
-                console.error('Gemini API 오류:', geminiError);
-                if (!retryAttempted) {
-                    retryAttempted = true;
+                    // 네이버 뉴스 본문 자동 선택
                     const newsContent = document.querySelector('#newsct_article');
                     if (newsContent) {
                         window.getSelection().removeAllRanges();
@@ -191,15 +154,36 @@ async function sendToAI(text, instruction) {
                         
                         const selectedText = window.getSelection().toString();
                         if (selectedText) {
-                            await sendToAI(selectedText, instruction);
-                        } else {
-                            showResult("뉴스 본문을 찾을 수 없습니다. 직접 본문을 선택해주세요.");
+                            // 선택된 텍스트로 재시도
+                            sendToAI(selectedText, instruction);
+                            return;
                         }
+                    }
+                    throw new Error('Gemini API 처리 중 오류가 발생했습니다.');
+                }
+
+                const aiResponse = extractResponseContent(data, result.selectedModel);
+                showResult(aiResponse);
+                addModelNameToLastMessage(result.selectedModel);
+
+            } catch (geminiError) {
+                console.error('Gemini API 오류:', geminiError);
+                // 자동 본문 선택 재시도
+                const newsContent = document.querySelector('#newsct_article');
+                if (newsContent) {
+                    window.getSelection().removeAllRanges();
+                    const range = document.createRange();
+                    range.selectNodeContents(newsContent);
+                    window.getSelection().addRange(range);
+                    
+                    const selectedText = window.getSelection().toString();
+                    if (selectedText) {
+                        sendToAI(selectedText, instruction);
                     } else {
-                        showResult(`요약할 수 없습니다: ${geminiError.message}`);
+                        showResult("뉴스 본문을 찾을 수 없습니다. 직접 본문을 선택해주세요.");
                     }
                 } else {
-                    showResult("API 접근이 제한되어 요약을 완료할 수 없습니다. 나중에 다시 시도해주세요.");
+                    showResult(`오류가 발생했습니다: ${geminiError.message}`);
                 }
             }
         } else {
@@ -269,9 +253,6 @@ async function sendToAI(text, instruction) {
     } catch (error) {
         console.error('Error in sendToAI:', error);
         showResult(`오류가 발생했습니다: ${error.message}`);
-    } finally {
-        // 함수 종료 시 재시도 플래그 초기화
-        retryAttempted = false;
     }
 }
 
