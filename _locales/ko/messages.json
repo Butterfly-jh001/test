@@ -39,5 +39,17 @@
     },
     "generating": {
       "message": "답변을 생성 중입니다..."
+    },
+    "modelGoogle20Flash": {
+      "message": "Google 2.0 플래시 (실험용)",
+      "description": "옵션 드롭다운의 Google 2.0 플래시 (실험용) 모델 레이블"
+    },
+    "apiKeyGoogle20Flash": {
+      "message": "Google 2.0 플래시 (실험용) API 키:",
+      "description": "옵션의 Google 2.0 플래시 (실험용) API 키 입력 필드 레이블"
+    },
+    "apiKeyGoogle20FlashPlaceholder": {
+      "message": "Google 2.0 플래시 (실험용) API 키를 입력하세요",
+      "description": "Google 2.0 플래시 (실험용) API 키 입력 필드의 플레이스홀더 텍스트"
     }
   }

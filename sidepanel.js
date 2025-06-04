@@ -172,10 +172,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 'cerebrasApiKey',  // Cerebras API 키 추가
                 'cerebrasModel',   // Cerebras 모델 추가
                 'selectedModel', 
-                'instructions'
+                'instructions',
+                'google20FlashApiKey'
             ], function(result) {
                 if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey && 
-                    !result.geminiflashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
+                    !result.geminiflashApiKey && !result.groqApiKey && !result.cerebrasApiKey && !result.google20FlashApiKey) {
                     throw new Error("API 키를 설정해주세요.");
                 }
     
@@ -236,7 +237,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         config.isStreaming = false;
                         break;
-                        // getAPIConfig 함수 내의 switch 문에 Cerebras 케이스 추가
+                    case 'gemini20Flash':
+                        if (!result.google20FlashApiKey) {
+                            throw new Error("Google 2.0 Flash API 키가 설정되지 않았습니다.");
+                        }
+                        config.url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${result.google20FlashApiKey.trim()}`;
+                        config.headers = { 'Content-Type': 'application/json' };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: { temperature: 0 }
+                        });
+                        config.isStreaming = false;
+                        break;
                     case 'Cerebras':
                         if (!result.cerebrasApiKey) {
                             throw new Error("Cerebras API 키가 설정되지 않았습니다.");

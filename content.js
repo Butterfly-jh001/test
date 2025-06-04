@@ -121,7 +121,7 @@ async function sendToAI(text, instruction) {
         const result = await chrome.storage.sync.get([
             'cohereApiKey', 'mistralApiKey', 'geminiApiKey', 
             'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey', 
-            'cerebrasModel', 'selectedModel', 'instructions'
+            'cerebrasModel', 'selectedModel', 'instructions', 'google20FlashApiKey'
         ]);
 
         const instructions = result.instructions || [];
@@ -429,8 +429,22 @@ async function getAPIConfig(result, instruction, text) {
                 });
                 config.isStreaming = false;
                 break;
-                case 'groq':
-                  // Groq 특별 설정
+            case 'gemini20Flash': // New case
+                config.url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${result.google20FlashApiKey.trim()}`;
+                config.headers = {
+                    'Content-Type': 'application/json'
+                };
+                config.body = JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: `${config.instructions}\n${contextMessage}\n\n${instruction}`
+                        }]
+                    }],
+                    generationConfig: { temperature: 0 }
+                });
+                config.isStreaming = false;
+                break;
+            case 'groq':
                   config.url = 'https://api.groq.com/openai/v1/chat/completions';
                   config.headers = {
                       'Authorization': `Bearer ${result.groqApiKey.trim()}`,
@@ -442,7 +456,7 @@ async function getAPIConfig(result, instruction, text) {
                               "role": "system",
                               "content": "Please be concise and focused in your responses."
                           },
-                          {
+                          { // For Groq, the 'text' variable (original full text) is used directly as per existing logic.
                               "content": `${config.instructions}\n${text}\n\n${instruction}`,
                               "role": "user"
                           }

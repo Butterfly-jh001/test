@@ -39,5 +39,17 @@
     },
     "generating": {
       "message": "Generating response..."
+    },
+    "modelGoogle20Flash": {
+      "message": "Google 2.0 Flash (Exp)",
+      "description": "Label for the Google 2.0 Flash (Experimental) model in the options dropdown"
+    },
+    "apiKeyGoogle20Flash": {
+      "message": "Google 2.0 Flash (Exp) API Key:",
+      "description": "Label for the Google 2.0 Flash (Experimental) API Key input field in options"
+    },
+    "apiKeyGoogle20FlashPlaceholder": {
+      "message": "Enter Google 2.0 Flash (Exp) API Key",
+      "description": "Placeholder text for the Google 2.0 Flash (Experimental) API Key input field"
     }
   }

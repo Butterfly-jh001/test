@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var ollamaModelNameInput = document.getElementById('ollamaModelName');
   var cerebrasApiKeyInput = document.getElementById('cerebrasApiKey');
   var cerebrasModelRadios = document.querySelectorAll('input[name="cerebrasModel"]');
+  var google20FlashApiKeyInput = document.getElementById('google20FlashApiKey');
 
   var aiModelSelect = document.getElementById('aiModel');
   var saveButton = document.getElementById('save');
@@ -47,7 +48,9 @@ function applyLanguage() {
                 addInstruction: 'Instruction 추가',
                 deleteInstruction: 'Instruction 삭제',
                 languageLabel: '언어 설정 (Language Setting):',
-                statusSaved: '설정이 저장되었습니다.'
+                statusSaved: '설정이 저장되었습니다.',
+                apiKeyGoogle20Flash: 'Google 2.0 플래시 API 키:',
+                apiKeyGoogle20FlashPlaceholder: 'Google 2.0 플래시 API 키를 입력하세요',
             },
             en: {
                 title: 'AI Summary Extension Settings',
@@ -59,7 +62,9 @@ function applyLanguage() {
                 addInstruction: 'Add Instruction',
                 deleteInstruction: 'Delete Instruction',
                 languageLabel: 'Language Setting (언어 설정):',
-                statusSaved: 'Settings saved successfully.'
+                statusSaved: 'Settings saved successfully.',
+                apiKeyGoogle20Flash: 'Google 2.0 Flash API Key:',
+                apiKeyGoogle20FlashPlaceholder: 'Enter Google 2.0 Flash API Key',
             }
         };
 
@@ -77,8 +82,27 @@ function applyLanguage() {
         // API 키 입력 필드 플레이스홀더 업데이트
         const apiInputs = document.querySelectorAll('input[type="text"][id$="ApiKey"]');
         apiInputs.forEach(input => {
-            input.placeholder = translations[lang].apiKeyPlaceholder;
+            // General placeholder for most API keys, exclude the new one which has specific translations
+            if (input.id !== 'google20FlashApiKey' && input.id !== 'ollamaModelName' && input.id !== 'instructionInput') {
+                 input.placeholder = translations[lang].apiKeyPlaceholder;
+            }
         });
+
+        // Specific translations for Google 2.0 Flash
+        const google20FlashLabel = document.querySelector('label[for="google20FlashApiKey"]');
+        if (google20FlashLabel) {
+            google20FlashLabel.textContent = translations[lang].apiKeyGoogle20Flash || 'Google 2.0 Flash API Key:';
+        }
+        // The input element itself (google20FlashApiKeyInput) is already globally defined
+        if (google20FlashApiKeyInput) {
+            google20FlashApiKeyInput.placeholder = translations[lang].apiKeyGoogle20FlashPlaceholder || 'Enter Google 2.0 Flash API Key';
+        }
+
+        // Ensure Ollama model name placeholder is also handled if it's different
+        if (ollamaModelNameInput) {
+            // Assuming it might need a generic or specific placeholder, adjust as necessary
+            // For now, let's assume it does not use the generic 'apiKeyPlaceholder'
+        }
     });
 }
 
@@ -94,6 +118,7 @@ applyLanguage();
       ollamaApiKeyInput.value = data.ollamaApiKey || '';
       ollamaModelNameInput.value = data.ollamaModelName || '';
       cerebrasApiKeyInput.value = data.cerebrasApiKey || '';
+      google20FlashApiKeyInput.value = data.google20FlashApiKey || '';
       aiModelSelect.value = data.selectedModel || 'cohere';
 
       cerebrasModelRadios.forEach(function(radio) {
@@ -108,6 +133,7 @@ applyLanguage();
     const mistralSection = document.getElementById('mistralApiSection');
     const geminiSection = document.getElementById('geminiApiSection');
     const geminiflashSection = document.getElementById('geminiflashApiSection');
+    const gemini20FlashSection = document.getElementById('gemini20FlashApiSection'); // Added
     const groqSection = document.getElementById('groqApiSection');
     const ollamaSection = document.getElementById('ollamaApiSection');
     const ollamaModelNameSection = document.getElementById('ollamaModelNameSection');
@@ -117,6 +143,7 @@ applyLanguage();
     mistralSection.style.display = selectedModel === 'mistralSmall' ? 'block' : 'none';
     geminiSection.style.display = selectedModel === 'gemini' ? 'block' : 'none';
     geminiflashSection.style.display = selectedModel === 'geminiflash' ? 'block' : 'none';
+    gemini20FlashSection.style.display = selectedModel === 'gemini20Flash' ? 'block' : 'none'; // Added
     groqSection.style.display = selectedModel === 'groq' ? 'block' : 'none';
     ollamaSection.style.display = selectedModel === 'ollama' ? 'block' : 'none';
     ollamaModelNameSection.style.display = selectedModel === 'ollama' ? 'block' : 'none';
@@ -138,6 +165,7 @@ applyLanguage();
     var ollamaApiKey = ollamaApiKeyInput.value.trim();
     var ollamaModelName = ollamaModelNameInput.value.trim();
     var cerebrasApiKey = cerebrasApiKeyInput.value.trim();
+    var google20FlashApiKey = google20FlashApiKeyInput.value.trim();
     var selectedModel = aiModelSelect.value;
     var cerebrasModel;
 
@@ -152,6 +180,7 @@ applyLanguage();
         mistralApiKey: mistralApiKey,
         geminiApiKey: geminiApiKey,
         geminiflashApiKey: geminiflashApiKey,
+        google20FlashApiKey: google20FlashApiKey,
         groqApiKey: groqApiKey,
         ollamaApiKey: ollamaApiKey,
         ollamaModelName: ollamaModelName,
