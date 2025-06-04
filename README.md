@@ -9,7 +9,7 @@ Cohere
 
 Groq
 
-Gemini (pro) / Flash
+Gemini (pro) / Flash / 2.0 Flash 추가 (2025-06-05)
 
 cerebras
 
@@ -28,7 +28,7 @@ including
 Mistral, 
 Cohere, 
 Groq, 
-Gemini (pro), and Flash. 
+Gemini (pro), and Flash, 2.0 flash
 
 All of these models offer free API usage. 
 
