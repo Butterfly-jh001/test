@@ -11,6 +11,9 @@ document.addEventListener('DOMContentLoaded', function() {
   var google20FlashApiKeyInput = document.getElementById('google20FlashApiKey');
 
   var aiModelSelect = document.getElementById('aiModel');
+  console.log('Debug: aiModelSelect element:', aiModelSelect);
+  console.log('Debug: aiModelSelect.value (selected option on load):', aiModelSelect.value);
+  console.log('Debug: aiModelSelect.innerHTML (all options):', aiModelSelect.innerHTML);
   var saveButton = document.getElementById('save');
   var status = document.getElementById('status');
 
@@ -110,6 +113,8 @@ function applyLanguage() {
 applyLanguage();
 
   function updateUI(data) {
+    console.log('Debug: updateUI data object from storage:', JSON.parse(JSON.stringify(data || {})));
+    console.log('Debug: updateUI data.google20FlashApiKey:', data ? data.google20FlashApiKey : 'data is null/undefined');
       cohereApiKeyInput.value = data.cohereApiKey || '';
       mistralApiKeyInput.value = data.mistralApiKey || '';
       geminiApiKeyInput.value = data.geminiApiKey || '';
@@ -151,7 +156,7 @@ applyLanguage();
   }
 
   // 저장된 설정 불러오기
-  chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'groqApiKey', 'ollamaApiKey', 'ollamaModelName', 'selectedModel', 'cerebrasApiKey', 'cerebrasModel'], function(data) {
+  chrome.storage.sync.get(['cohereApiKey', 'mistralApiKey', 'geminiApiKey', 'geminiflashApiKey', 'google20FlashApiKey', 'groqApiKey', 'ollamaApiKey', 'ollamaModelName', 'selectedModel', 'cerebrasApiKey', 'cerebrasModel'], function(data) {
       updateUI(data);
   });
 
