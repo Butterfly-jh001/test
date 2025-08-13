@@ -66,19 +66,19 @@ function updateContextMenus(language) {
       chrome.contextMenus.create({
           id: "summarizeSelection",
           title: texts.summarizeSelection,
-          contexts: ["selection"]
+          contexts: ["selection", "page"]
       });
 
       chrome.contextMenus.create({
           id: "translateToEnglish",
           title: texts.translateToEnglish,
-          contexts: ["selection"]
+          contexts: ["selection", "page"]
       });
 
       chrome.contextMenus.create({
           id: "translateToKorean",
           title: texts.translateToKorean,
-          contexts: ["selection"]
+          contexts: ["selection", "page"]
       });
 
   });
@@ -100,8 +100,67 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
   
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (tab.id === chrome.tabs.TAB_ID_NONE) {
+async function getSelectionFromFrames(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true, matchAboutBlank: true },
+      world: 'ISOLATED',
+      func: () => {
+        try {
+          const active = document.activeElement;
+          let selected = '';
+          if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+            const start = active.selectionStart || 0;
+            const end = active.selectionEnd || 0;
+            selected = (active.value || '').substring(start, end);
+          } else if (window.getSelection) {
+            selected = String(window.getSelection());
+          }
+          return selected || '';
+        } catch (e) {
+          return '';
+        }
+      }
+    });
+    const texts = (results || [])
+      .map(r => (r && typeof r.result === 'string') ? r.result.trim() : '')
+      .filter(Boolean);
+    if (texts.length === 0) return '';
+    // pick the longest selection as best guess
+    return texts.reduce((a, b) => (b.length > a.length ? b : a), '');
+  } catch (e) {
+    console.warn('Selection extraction failed:', e);
+    return '';
+  }
+}
+
+async function ensureInjectedAndResend(tabId, payload) {
+  try {
+    // Try to inject CSS (ignore errors)
+    try {
+      await chrome.scripting.insertCSS({ target: { tabId, allFrames: true }, files: ['markdown.css'] });
+    } catch (e) {}
+
+    // Inject shared renderer and content script in all frames
+    await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true, matchAboutBlank: true },
+      files: ['markdownRenderer.js', 'content.js']
+    });
+  } catch (e) {
+    console.warn('Script injection encountered an issue:', e);
+  }
+  // Resend message
+  chrome.tabs.sendMessage(tabId, payload, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('Resend failed:', chrome.runtime.lastError.message);
+    } else {
+      console.log('Message resent successfully');
+    }
+  });
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (!tab || tab.id === chrome.tabs.TAB_ID_NONE) {
     console.error('Cannot send message to this tab');
     return;
   }
@@ -114,13 +173,18 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     action = "summarizeFullPage";
   }
 
-  chrome.tabs.sendMessage(tab.id, { 
-    action: action,
-    summaryType: summaryType,
-    text: info.selectionText
-  }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error(chrome.runtime.lastError.message);
+  // Robust selection handling for iframes/editables
+  const isSelectionAction = action === 'summarizeSelection' || action === 'translateToEnglish' || action === 'translateToKorean';
+  let selectionText = (info && typeof info.selectionText === 'string') ? info.selectionText.trim() : '';
+  if (isSelectionAction && !selectionText) {
+    selectionText = await getSelectionFromFrames(tab.id);
+  }
+
+  const payload = { action, summaryType, text: selectionText };
+  chrome.tabs.sendMessage(tab.id, payload, (response) => {
+    if (chrome.runtime.lastError || !response) {
+      console.warn('Initial send failed or no response, attempting injection...', chrome.runtime.lastError?.message || 'no response');
+      ensureInjectedAndResend(tab.id, payload);
     } else {
       console.log('Message sent successfully');
     }

@@ -2,7 +2,12 @@
 console.log('Content script loaded');
 
 function getPageContent() {
-  return document.body.innerText;
+  try {
+    // Prefer visible text content
+    return document.body ? document.body.innerText : document.documentElement.innerText || '';
+  } catch (e) {
+    return document.title || '';
+  }
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -24,24 +29,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       case "translateToKorean":
         translate(request.text, "한국어");
         break;
+      default:
+        // No-op
+        break;
     }
     sendResponse({received: true});
   }
   return true;
 });
 
+function ensureOverlayHost() {
+  // Some pages (e.g., SPA email UIs) frequently re-render DOM; re-create overlay if missing
+  const existing = document.getElementById('summaryOverlay');
+  if (!existing) {
+    try {
+      removeExistingOverlay();
+    } catch (e) {}
+  }
+}
+
 function summarizeFullPage(summaryType) {
-  const fullText = document.body.innerText;
+  ensureOverlayHost();
+  const fullText = getPageContent();
   let instruction = getSummaryInstruction(summaryType);
   sendToAI(fullText, instruction);
 }
 
 function summarizeSelection(text) {
-  sendToAI(text, "선택한 텍스트를 요약해주세요.");
+  ensureOverlayHost();
+  const selected = (typeof text === 'string' && text.trim()) ? text : String(window.getSelection() || '');
+  if (!selected) {
+    // Attempt to read from active editable
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+      const val = active.value || active.textContent || '';
+      const start = active.selectionStart || 0;
+      const end = active.selectionEnd || 0;
+      const sub = val.substring(start, end) || val;
+      sendToAI(sub, "선택한 텍스트를 요약해주세요.");
+      return;
+    }
+  }
+  sendToAI(selected || text || '', "선택한 텍스트를 요약해주세요.");
 }
 
 function translate(text, targetLanguage) {
-  sendToAI(text, `이 텍스트를 ${targetLanguage}로 번역해주세요.`);
+  ensureOverlayHost();
+  const content = (typeof text === 'string' && text.trim()) ? text : String(window.getSelection() || '') || getPageContent();
+  sendToAI(content, `이 텍스트를 ${targetLanguage}로 번역해주세요.`);
 }
 
 function getSummaryInstruction(summaryType) {
@@ -75,7 +110,7 @@ function createOverlay() {
     border-radius: 15px !important;
     padding: 25px !important;
     box-shadow: 0 4px 15px rgba(78, 54, 41, 0.1) !important;
-    z-index: 999999 !important;
+    z-index: 2147483647 !important;
     overflow-y: auto !important;
     font-family: Arial, sans-serif !important;
     color: #4e3629 !important;
