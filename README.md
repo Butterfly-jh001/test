@@ -123,8 +123,8 @@ sidepanel.js
 This Chrome extension is a tool that quickly summarizes webpage content. It utilizes AI to easily summarize content from desired webpages and provides a conversational interface through a side panel.
 
 ### Key Features
-- Webpage summarization via context menu (General Summary) (2025-08-13)
-- Markdown rendering for summarized content (2025-08-13)
+- Webpage summarization via context menu (General Summary) (August 13, 2025)
+- Markdown rendering for summarized content (August 13, 2025)
 - Conversational interface using side panel
 - Personalized webpage content summarization
 
@@ -187,7 +187,7 @@ This project is under the MIT License.
 
 ### Version History
 
-**v1.1 (2025-08-12)**
+**v1.1 (August 13, 2025)**
 - Added 'General Summary' feature to the context menu.
 - Implemented Markdown rendering for summary results.
 - 컨텍스트 메뉴에 '일반 요약' 기능 추가
