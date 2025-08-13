@@ -37,7 +37,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function addMessage(message, isUser) {
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', isUser ? 'user-message' : 'ai-message');
-        messageElement.textContent = message;
+        if (!isUser && window.MarkdownRenderer) {
+            window.MarkdownRenderer.ensureStylesInjected();
+            const md = message || "";
+            messageElement.setAttribute('data-md-source', md);
+            // create inner wrapper to avoid styling root message box
+            const wrapper = document.createElement('div');
+            wrapper.classList.add('markdown-body');
+            messageElement.appendChild(wrapper);
+            window.MarkdownRenderer.renderInto(wrapper, md);
+        } else {
+            messageElement.textContent = message;
+        }
         chatMessages.appendChild(messageElement);
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
@@ -52,7 +63,21 @@ document.addEventListener('DOMContentLoaded', function() {
             aiMessage.classList.add('message', 'ai-message');
             chatMessages.appendChild(aiMessage);
         }
-        aiMessage.textContent = text;
+        if (window.MarkdownRenderer) {
+            window.MarkdownRenderer.ensureStylesInjected();
+            const md = text || "";
+            aiMessage.setAttribute('data-md-source', md);
+            let wrapper = aiMessage.querySelector('.markdown-body');
+            if (!wrapper) {
+                wrapper = document.createElement('div');
+                wrapper.classList.add('markdown-body');
+                aiMessage.innerHTML = '';
+                aiMessage.appendChild(wrapper);
+            }
+            window.MarkdownRenderer.renderInto(wrapper, md);
+        } else {
+            aiMessage.textContent = text;
+        }
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
         addCopyButton(aiMessage);
@@ -64,7 +89,9 @@ document.addEventListener('DOMContentLoaded', function() {
         copyButton.textContent = '복사';
         copyButton.style.cssText = 'position: absolute; bottom: -20px; right: 10px; cursor: pointer; color: #8b4513;';
         copyButton.addEventListener('click', () => {
-            navigator.clipboard.writeText(messageElement.textContent.replace('복사', ''))
+            const mdSource = messageElement.getAttribute('data-md-source');
+            const textToCopy = mdSource || messageElement.textContent.replace('복사', '');
+            navigator.clipboard.writeText(textToCopy)
                 .then(() => console.log('Content copied to clipboard'))
                 .catch(err => console.error('Failed to copy: ', err));
         });

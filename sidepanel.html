@@ -46,6 +46,7 @@
         background-color: #e6ccb2; /* 매우 연한 브라운 배경 */
         color: #4e3629; /* 어두운 브라운 텍스트 */
     }
+    .ai-message .markdown-body { color: inherit; }
     #user-input {
         width: 100%;
         padding: 12px;
@@ -106,6 +107,7 @@
         <input type="text" id="user-input" placeholder="메시지를 입력하세요...">
         <button id="send-button">전송</button>
     </div>
+    <script src="markdownRenderer.js"></script>
     <script src="sidepanel.js"></script>
 </body>
 </html>

@@ -116,6 +116,7 @@ function autoSelectNewsContent() {
 
 // 전역 변수로 재시도 플래그 추가
 let retryAttempted = false;
+let lastMarkdownResult = "";
 
 async function sendToAI(text, instruction) {
     try {
@@ -571,7 +572,7 @@ function showResult(result) {
   const content = document.createElement('div');
   content.innerHTML = `
     <h2 style="margin-top: 0; margin-bottom: 20px; color: #2c3e50;">결과</h2>
-    <div id="resultText" style="margin-bottom: 20px; line-height: 1.6; color: #444;">${result.replace(/\n/g, '<br>')}</div>
+    <div id="resultText" class="markdown-body" style="margin-bottom: 20px; line-height: 1.6; color: #444;"></div>
     <button id="closeOverlay">닫기</button>
     <button id="copyResult">복사</button>
     <span id="aiModelName"></span>
@@ -579,17 +580,24 @@ function showResult(result) {
   overlay.appendChild(content);
   document.body.appendChild(overlay);
 
+  if (window.MarkdownRenderer) {
+    window.MarkdownRenderer.ensureStylesInjected();
+    lastMarkdownResult = result || "";
+    window.MarkdownRenderer.renderInto(document.getElementById('resultText'), lastMarkdownResult);
+  } else {
+    const resultDiv = document.getElementById('resultText');
+    resultDiv.textContent = result;
+  }
+
   document.getElementById('closeOverlay').addEventListener('click', removeExistingOverlay);
   document.getElementById('copyResult').addEventListener('click', copyResultToClipboard);
 }
 
 function copyResultToClipboard() {
-  const resultText = document.getElementById('resultText');
-  if (resultText) {
-    navigator.clipboard.writeText(resultText.innerText)
-      .then(() => console.log('Content copied to clipboard'))
-      .catch(err => console.error('Failed to copy: ', err));
-  }
+  const textToCopy = lastMarkdownResult || (document.getElementById('resultText')?.innerText || "");
+  navigator.clipboard.writeText(textToCopy)
+    .then(() => console.log('Content copied to clipboard'))
+    .catch(err => console.error('Failed to copy: ', err));
 }
 
 function showLoading(instruction) {
@@ -600,8 +608,8 @@ function showLoading(instruction) {
     <h2 style="margin-top: 0; margin-bottom: 20px; color: #333;">작업 중...</h2>
     <p style="margin-bottom: 15px; color: #666;"><strong>현재 작업:</strong> ${instruction}</p>
     <div class="loader"></div>
+    <div id="partialResult" class="markdown-body"></div>
     <p id="progressText" style="margin-top: 20px;">작업을 시작합니다...</p>
-    <p id="partialResult"></p>
   `;
   overlay.appendChild(content);
   document.body.appendChild(overlay);
@@ -627,10 +635,7 @@ function addStyles() {
     }
     #partialResult {
       margin-top: 20px;
-      white-space: pre-wrap;
       word-break: break-word;
-      line-height: 1.6;
-      color: #444;
     }
     #summaryOverlay div {
       line-height: 1.6;
@@ -668,13 +673,28 @@ function addModelNameToLastMessage(model) {
   aiModelSpan.style.marginLeft = '10px';
   aiModelSpan.style.fontSize = '0.9em';
   aiModelSpan.style.color = '#666';
-  document.getElementById('summaryOverlay').appendChild(aiModelSpan);
+  const overlayEl = document.getElementById('summaryOverlay');
+  if (overlayEl) overlayEl.appendChild(aiModelSpan);
 }
 
 function updateAIMessage(text) {
     const aiMessage = document.getElementById('resultText');
+    const partial = document.getElementById('partialResult');
+    lastMarkdownResult = text || "";
     if (aiMessage) {
-        aiMessage.innerHTML = text.replace(/\n/g, '<br>');
+        if (window.MarkdownRenderer) {
+          window.MarkdownRenderer.ensureStylesInjected();
+          window.MarkdownRenderer.renderInto(aiMessage, lastMarkdownResult);
+        } else {
+          aiMessage.textContent = text;
+        }
+    } else if (partial) {
+        if (window.MarkdownRenderer) {
+          window.MarkdownRenderer.ensureStylesInjected();
+          window.MarkdownRenderer.renderInto(partial, lastMarkdownResult);
+        } else {
+          partial.textContent = text;
+        }
     }
 }
 
