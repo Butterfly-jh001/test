@@ -1,34 +1,40 @@
 {
   "manifest_version": 3,
   "default_locale": "ko",
-    "name": "웹페이지 요약 및 번역 도우미",
-    "version": "1.0",
-    "description": "웹페이지 요약 및 번역 기능을 제공하는 크롬 확장 프로그램",
-    "permissions": [
-        "contextMenus",
-        "activeTab",
-        "storage",
-        "scripting",
-        "sidePanel"
-      ],
-      "host_permissions": [
-        "<all_urls>"
-      ],
-    "background": {
-      "service_worker": "background.js"
-    },
-    "content_scripts": [
-      {
-        "matches": ["<all_urls>"],
-        "js": ["content.js"],
-        "run_at": "document_idle"
-      }
-    ],
-    "action": {
-      "default_title": "Open AI Chat"
-    },
-    "side_panel": {
-      "default_path": "sidepanel.html"
-    },
-    "options_page": "options.html"
-  }
+  "name": "웹페이지 요약 및 번역 도우미",
+  "version": "1.0",
+  "description": "웹페이지 요약 및 번역 기능을 제공하는 크롬 확장 프로그램",
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "storage",
+    "scripting",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["markdownRenderer.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["markdown.css"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "action": {
+    "default_title": "Open AI Chat"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "options_page": "options.html"
+}
