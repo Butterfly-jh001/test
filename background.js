@@ -2,21 +2,23 @@
 const menuTexts = {
   ko: {
       summarizeFullPage: "전체 페이지 요약",
+      generalSummary: "일반요약",   // ✅ 추가
       fullSummary: "Full 요약",
       mediumSummary: "보고서형식 요약",
       shortSummary: "간단한 요약",
       summarizeSelection: "선택 영역 요약",
       translateToEnglish: "영어로 번역",
-      translateToKorean: "한글로 번역"
+      translateToKorean: "한글로 번역",
   },
   en: {
       summarizeFullPage: "Summarize Full Page",
+      generalSummary: "General Summary",  // ✅ 추가
       fullSummary: "Full Summary",
       mediumSummary: "Report Style Summary",
       shortSummary: "Brief Summary",
       summarizeSelection: "Summarize Selection",
       translateToEnglish: "Translate to English",
-      translateToKorean: "Translate to Korean"
+      translateToKorean: "Translate to Korean",
   }
 };
 
@@ -30,6 +32,13 @@ function updateContextMenus(language) {
       chrome.contextMenus.create({
           id: "summarizeFullPage",
           title: texts.summarizeFullPage,
+          contexts: ["page"]
+      });
+
+      chrome.contextMenus.create({
+          id: "generalSummary",
+          title: texts.generalSummary,
+          parentId: "summarizeFullPage",
           contexts: ["page"]
       });
 
@@ -71,6 +80,7 @@ function updateContextMenus(language) {
           title: texts.translateToKorean,
           contexts: ["selection"]
       });
+
   });
 }
 
@@ -99,7 +109,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   let action = info.menuItemId;
   let summaryType = "";
 
-  if (["fullSummary", "mediumSummary", "shortSummary"].includes(action)) {
+  if (["fullSummary", "mediumSummary", "shortSummary","generalSummary"].includes(action)) {
     summaryType = action;
     action = "summarizeFullPage";
   }

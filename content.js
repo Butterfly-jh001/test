@@ -46,9 +46,10 @@ function translate(text, targetLanguage) {
 
 function getSummaryInstruction(summaryType) {
   const instructions = {
-    fullSummary: "핵심 내용 추출다음 텍스트를 요약하여 가장 중요한 핵심 내용만 3가지 문장으로 나타내주세요.이 글의 주요 논점을 간결하게 요약해주세요. 강조하고 싶은 부분 지정이 글에서 '결론' 부분을 자세히 요약해주세요.텍스트에서 '문제점'과 '해결 방안'에 대한 내용을 중심으로 요약해주세요.마크다운 형식은 사용하지 않는다.",
+    fullSummary: "핵심 내용 추출다음 텍스트를 요약하여 가장 중요한 핵심 내용만 문장으로 나타내주세요.이 글의 주요 논점을 간결하게 요약해주세요. 강조하고 싶은 부분 지정이 글에서 '결론' 부분을 자세히 요약해주세요.텍스트에서 '문제점'과 '해결 방안'에 대한 내용을 중심으로 요약해주세요.마크다운 형식은 사용하지 않는다.",
     mediumSummary: "다음 웹페이지의 내용을 읽고, 알맞은 요약 형식을 선택한 후 그 형식에 맞춰 주요 내용을 요약해주세요. 그리고 해당 방식을 보고서 형식으로 요약해줘.",
-    shortSummary: "간단히 요약해주세요. 가장 중요한 핵심만을 간결하게 담아주세요."
+    shortSummary: "간단히 요약해주세요. 가장 중요한 핵심만을 간결하게 담아주세요.",
+    generalSummary: "요약해주세요"   // ✅ 추가
   };
   return instructions[summaryType] || instructions.shortSummary;
 }
@@ -121,7 +122,7 @@ async function sendToAI(text, instruction) {
         const result = await chrome.storage.sync.get([
             'cohereApiKey', 'mistralApiKey', 'geminiApiKey', 
             'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey', 
-            'cerebrasModel', 'selectedModel', 'instructions'
+            'cerebrasModel', 'selectedModel', 'instructions', 'google20FlashApiKey'
         ]);
 
         const instructions = result.instructions || [];
@@ -429,8 +430,22 @@ async function getAPIConfig(result, instruction, text) {
                 });
                 config.isStreaming = false;
                 break;
-                case 'groq':
-                  // Groq 특별 설정
+            case 'gemini20Flash': // New case
+                config.url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${result.google20FlashApiKey.trim()}`;
+                config.headers = {
+                    'Content-Type': 'application/json'
+                };
+                config.body = JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: `${config.instructions}\n${contextMessage}\n\n${instruction}`
+                        }]
+                    }],
+                    generationConfig: { temperature: 0 }
+                });
+                config.isStreaming = false;
+                break;
+            case 'groq':
                   config.url = 'https://api.groq.com/openai/v1/chat/completions';
                   config.headers = {
                       'Authorization': `Bearer ${result.groqApiKey.trim()}`,
@@ -442,7 +457,7 @@ async function getAPIConfig(result, instruction, text) {
                               "role": "system",
                               "content": "Please be concise and focused in your responses."
                           },
-                          {
+                          { // For Groq, the 'text' variable (original full text) is used directly as per existing logic.
                               "content": `${config.instructions}\n${text}\n\n${instruction}`,
                               "role": "user"
                           }
