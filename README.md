@@ -45,7 +45,8 @@ For Korean
 이 크롬 확장프로그램은 웹페이지의 내용을 빠르게 요약해주는 도구입니다. 사용자가 원하는 웹페이지의 내용을 AI를 활용하여 간편하게 요약하고, 사이드패널을 통해 대화형 인터페이스를 제공합니다.
 
 ### 주요 기능
-- 컨텍스트 메뉴를 통한 웹페이지 요약
+- 컨텍스트 메뉴를 통한 웹페이지 요약 (일반 요약) (2025-08-13)
+- 요약 내용에 마크다운 렌더링 적용 (2025-08-13)
 - 사이드패널을 활용한 대화형 인터페이스
 - 사용자 맞춤형 웹페이지 콘텐츠 요약
 
@@ -73,6 +74,10 @@ background.js
 content.js
 
 manifest.json
+
+markdown.css
+
+markdownRenderer.js
 
 options.html
 
@@ -118,7 +123,8 @@ sidepanel.js
 This Chrome extension is a tool that quickly summarizes webpage content. It utilizes AI to easily summarize content from desired webpages and provides a conversational interface through a side panel.
 
 ### Key Features
-- Webpage summarization via context menu
+- Webpage summarization via context menu (General Summary) (2025-08-13)
+- Markdown rendering for summarized content (2025-08-13)
 - Conversational interface using side panel
 - Personalized webpage content summarization
 
@@ -180,7 +186,16 @@ This project is under the MIT License.
 - [List major dependencies if any]
 
 ### Version History
-- [Major version changes and updates]
+
+**v1.1 (2025-08-12)**
+- Added 'General Summary' feature to the context menu.
+- Implemented Markdown rendering for summary results.
+- 컨텍스트 메뉴에 '일반 요약' 기능 추가
+- 요약 결과에 마크다운 렌더링 적용
+
+**v1.0 (Initial Release)**
+- Initial release
+- 초기 릴리즈
 
 ## 📞 Contact
 - [Your contact information if you wish to include]
