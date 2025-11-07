@@ -67,6 +67,7 @@
             <option value="mistralSmall">Mistral Small</option>
             <option value="gemini">Gemini</option>
             <option value="geminiflash">Gemini Flash</option>
+            <option value="gemini20Flash">Google 2.0 Flash (Exp)</option>
             <option value="groq">Groq Llama 3.1 70B</option>
             <option value="ollama">Ollama API</option>
             <option value="Cerebras">Cerebras</option>
@@ -87,6 +88,10 @@
             <label for="geminiflashApiKey">Gemini Flash API 키:</label>
             <input type="text" id="geminiflashApiKey" placeholder="Gemini Flash API 키를 입력하세요">
         </div>
+        <div id="gemini20FlashApiSection">
+            <label for="google20FlashApiKey">Google 2.0 Flash API Key:</label>
+            <input type="text" id="google20FlashApiKey" placeholder="Enter Google 2.0 Flash API Key">
+        </div>
         <div id="groqApiSection">
             <label for="groqApiKey">Groq Llama 3.1 70B API 키:</label>
             <input type="text" id="groqApiKey" placeholder="Groq Llama 3.1 70B API 키를 입력하세요">
@@ -96,10 +101,10 @@
             <input type="text" id="cerebrasApiKey" placeholder="Cerebras API 키를 입력하세요">
             <label for="cerebrasModel">Cerebras 모델 선택:</label>
             <div>
-                <label for="llama3.1-8b"><input type="radio" id="llama3.1-8b" name="cerebrasModel" value="llama3.1-8b">llama3.1-8b</label>
+                <label for="llama-3.3-70b"><input type="radio" id="llama-3.3-70b" name="cerebrasModel" value="llama-3.3-70b">llama-3.3-70b</label>
             </div>
             <div>
-                <label for="llama3.1-70b"><input type="radio" id="llama3.1-70b" name="cerebrasModel" value="llama3.1-70b">llama3.1-70b</label>
+                <label for="gpt-oss-120b"><input type="radio" id="gpt-oss-120b" name="cerebrasModel" value="gpt-oss-120b">gpt-oss-120b</label>
             </div>
         </div>
         <div id="ollamaApiSection">

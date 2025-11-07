@@ -210,22 +210,48 @@ async function sendToAI(text, instruction) {
             // 다른 모델들의 처리 로직
             switch (result.selectedModel) {
                 case 'groq':
-                    if (text.length > 3000) {
-                        updateProgress("텍스트가 너무 깁니다. 분할 처리를 시작합니다...");
-                        const chunks = splitText(text, 2500);
-                        const chunkToProcess = chunks[0];
-                        updateProgress("텍스트 처리 중...");
-                        const apiConfig = await getAPIConfig(result, instruction, chunkToProcess);
-                        const response = await fetch(apiConfig.url, {
-                            method: 'POST',
-                            headers: apiConfig.headers,
-                            body: apiConfig.body
-                        });
-                        if (!response.ok) {
-                            throw new Error(`API 요청 실패 (${response.status}): ${await response.text()}`);
+                    const maxChunkLength = 20000;  // 3000 → 20K자로 증가 (토큰 ≈ 5K, 여유롭게)
+                    if (text.length > maxChunkLength) {
+                        updateProgress("텍스트가 길어 청크로 분할 처리합니다...");
+                        const chunks = splitText(text, maxChunkLength);
+                        let fullResponse = "";  // 모든 청크 응답 누적
+                        
+                        for (let i = 0; i < chunks.length; i++) {
+                            updateProgress(`청크 ${i + 1}/${chunks.length} 처리 중...`);
+                            const chunkInstruction = chunks.length > 1 
+                                ? `${instruction} (이 부분: 청크 ${i + 1}/${chunks.length})` 
+                                : instruction;
+                            
+                            const apiConfig = await getAPIConfig(result, chunkInstruction, chunks[i]);
+                            const response = await fetch(apiConfig.url, {
+                                method: 'POST',
+                                headers: apiConfig.headers,
+                                body: apiConfig.body
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error(`청크 ${i + 1} 처리 실패 (${response.status}): ${await response.text()}`);
+                            }
+                            
+                            const chunkResponse = await handleStreamingResponse(response, 'groq', (partial) => {
+                                // 부분 응답 시 UI 업데이트 (선택)
+                                if (i === 0) {
+                                    updateAIMessage(partial);
+                                }
+                            });
+                            
+                            if (chunks.length > 1) {
+                                fullResponse += `\n\n--- 청크 ${i + 1} 요약 ---\n${chunkResponse}`;
+                            } else {
+                                fullResponse = chunkResponse;
+                            }
                         }
-                        const aiResponse = await handleStreamingResponse(response, 'groq', updateAIMessage);
-                        showResult(`참고: 텍스트가 길어 일부만 처리되었습니다.\n\n${aiResponse}`);
+                        
+                        const finalResponse = chunks.length > 1 
+                            ? `전체 요약 (${chunks.length}개 청크):${fullResponse}` 
+                            : fullResponse;
+                        
+                        showResult(finalResponse);
                         addModelNameToLastMessage('groq');
                         return;
                     }
@@ -365,7 +391,7 @@ async function getAPIConfig(result, instruction, text) {
               'Content-Type': 'application/json'
           };
           
-          const selectedModel = result.cerebrasModel || 'llama3.1-8b';
+          const selectedModel = result.cerebrasModel || 'llama-3.3-70b';
           
           config.body = JSON.stringify({
               model: selectedModel,
@@ -463,9 +489,9 @@ async function getAPIConfig(result, instruction, text) {
                               "role": "user"
                           }
                       ],
-                      "model": "llama-3.1-70b-versatile",
+                      "model": "llama-3.3-70b-versatile",
                       "stream": true,
-                      "max_tokens": 1000,
+                      "max_completion_tokens": 1000,
                       "temperature": 0.7
                   });
                   break;
@@ -479,7 +505,7 @@ async function getAPIConfig(result, instruction, text) {
                     'Content-Type': 'application/json'
                 };
                 
-                const selectedModel = result.cerebrasModel || 'llama3.1-8b';
+                const selectedModel = result.cerebrasModel || 'llama-3.3-70b';
                 
                 // 첫 번째 청크만 처리하도록 수정
                 config.body = JSON.stringify({
