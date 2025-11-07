@@ -187,6 +187,10 @@ This project is under the MIT License.
 
 ### Version History
 
+**v1.2 (November 07, 2025)**
+- Updated previously unusable models, excluding Ollama.
+- 사용 불가능했던 모델들에 대한 업데이트, Ollama 제외
+
 **v1.1 (August 13, 2025)**
 - Added 'General Summary' feature to the context menu.
 - Implemented Markdown rendering for summary results.
