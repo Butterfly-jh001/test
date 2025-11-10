@@ -187,6 +187,10 @@ This project is under the MIT License.
 
 ### Version History
 
+**v1.3 (November 10, 2025)**
+- Gemini endpoint updated
+- Gemini 엔드포인트 수정
+
 **v1.2 (November 07, 2025)**
 - Updated previously unusable models, excluding Ollama.
 - 사용 불가능했던 모델들에 대한 업데이트, Ollama 제외
