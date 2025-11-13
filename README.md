@@ -187,6 +187,10 @@ This project is under the MIT License.
 
 ### Version History
 
+**v1.3.1 (November 13, 2025)**
+- Modify copy method when copying summary or answer results
+- 요약, 답변 결과 복사할 때 복사 방식 수정
+
 **v1.3 (November 10, 2025)**
 - Gemini endpoint updated
 - Gemini 엔드포인트 수정
