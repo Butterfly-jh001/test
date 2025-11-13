@@ -972,7 +972,23 @@ function showResult(result) {
 }
 
 function copyResultToClipboard() {
-  const textToCopy = lastMarkdownResult || (document.getElementById('resultText')?.innerText || "");
+  const targetNode =
+    document.getElementById('resultText') ||
+    document.getElementById('partialResult');
+
+  const selection = window.getSelection && window.getSelection();
+  if (targetNode && selection) {
+    selection.removeAllRanges();
+    const range = document.createRange();
+    range.selectNodeContents(targetNode);
+    selection.addRange(range);
+  }
+
+  const textToCopy =
+    (targetNode && (targetNode.innerText || targetNode.textContent)) ||
+    lastMarkdownResult ||
+    "";
+
   navigator.clipboard.writeText(textToCopy)
     .then(() => console.log('Content copied to clipboard'))
     .catch(err => console.error('Failed to copy: ', err));

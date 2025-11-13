@@ -85,17 +85,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 복사 버튼 추가 함수
     function addCopyButton(messageElement) {
-        const copyButton = document.createElement('span');
-        copyButton.textContent = '복사';
-        copyButton.style.cssText = 'position: absolute; bottom: -20px; right: 10px; cursor: pointer; color: #8b4513;';
-        copyButton.addEventListener('click', () => {
-            const mdSource = messageElement.getAttribute('data-md-source');
-            const textToCopy = mdSource || messageElement.textContent.replace('복사', '');
+        // remove legacy button version if present
+        const legacyButton = messageElement.querySelector('button.copy-button');
+        if (legacyButton) {
+            legacyButton.remove();
+        }
+
+        let copyButton = messageElement.querySelector('[data-copy-button]');
+        if (!copyButton) {
+            copyButton = document.createElement('span');
+            copyButton.setAttribute('data-copy-button', 'true');
+            copyButton.textContent = '복사';
+            copyButton.style.cssText = 'position: absolute; bottom: -20px; right: 10px; cursor: pointer; color: #8b4513;';
+            messageElement.appendChild(copyButton);
+        }
+
+        copyButton.onclick = () => {
+            const targetNode = messageElement.querySelector('.markdown-body') || messageElement;
+            const selection = window.getSelection && window.getSelection();
+            if (selection) {
+                selection.removeAllRanges();
+                const range = document.createRange();
+                range.selectNodeContents(targetNode);
+                selection.addRange(range);
+            }
+
+            const textToCopy = targetNode.innerText || targetNode.textContent || '';
             navigator.clipboard.writeText(textToCopy)
                 .then(() => console.log('Content copied to clipboard'))
                 .catch(err => console.error('Failed to copy: ', err));
-        });
-        messageElement.appendChild(copyButton);
+        };
     }
 
     // API 요청 함수
