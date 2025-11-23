@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const chatMessages = document.getElementById('chat-messages');
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 페이지 컨텐츠 업데이트 함수
     async function updatePageContent() {
         try {
-            const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
             if (tabs[0]) {
                 if (tabs[0].url.startsWith('chrome://')) {
                     pageContent = "이 페이지의 내용은 보안상의 이유로 접근할 수 없습니다.";
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
-                const response = await chrome.tabs.sendMessage(tabs[0].id, {action: "getPageContent"});
+                const response = await chrome.tabs.sendMessage(tabs[0].id, { action: "getPageContent" });
                 if (response && response.content) {
                     pageContent = response.content;
                     console.log("Page content updated:", pageContent.substring(0, 100) + "...");
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', function() {
         chatMessages.appendChild(messageElement);
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
-        conversationHistory.push({role: isUser ? "User" : "Chatbot", message: message});
+        conversationHistory.push({ role: isUser ? "User" : "Chatbot", message: message });
     }
 
     // AI 메시지 업데이트 함수
@@ -133,46 +133,236 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 스트리밍 응답 처리 함수
-    async function handleStreamingResponse(response, updateCallback) {
+    async function handleStreamingResponse(response, model, updateCallback) {
         const reader = response.body.getReader();
+        const decoder = new TextDecoder();
         let accumulatedResponse = "";
         let buffer = "";
+        let hasReceivedData = false;
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        console.log(`스트리밍 응답 처리 시작 (모델: ${model})`);
 
-            buffer += new TextDecoder().decode(value);
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    // 버퍼에 남은 데이터 처리 시도 (Gemini)
+                    if (buffer.trim() && (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash')) {
+                        try {
+                            const finalResult = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
+                            if (finalResult.hasNewData) {
+                                accumulatedResponse = finalResult.accumulatedResponse;
+                            }
+                        } catch (e) {
+                            console.warn('버퍼 처리 실패:', e);
+                        }
+                    }
+                    break;
+                }
 
-            for (const line of lines) {
-                if (line.trim() === '') continue;
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
 
-                let jsonLine = line.startsWith('data: ') ? line.slice(6) : line;
-                if (jsonLine.startsWith('event:')) continue;
+                // Gemini의 경우 JSON 객체 단위로 파싱 시도
+                if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash') {
+                    const processResult = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
+                    if (processResult.processed) {
+                        buffer = processResult.remainingBuffer;
+                        if (processResult.hasNewData) {
+                            hasReceivedData = true;
+                            accumulatedResponse = processResult.accumulatedResponse;
+                        }
+                    }
+                } else {
+                    // 다른 모델들은 기존 방식 사용
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
 
-                try {
-                    const parsed = JSON.parse(jsonLine);
-                    accumulatedResponse += extractResponseContent(parsed);
-                    updateCallback(accumulatedResponse);
-                } catch (e) {
-                    console.warn('Incomplete JSON, buffering:', e);
+                    for (const line of lines) {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine === '') continue;
+
+                        try {
+                            if (model === 'cohere' && trimmedLine.startsWith('event:')) continue;
+                            if (model === 'groq' && trimmedLine.startsWith(':')) continue;
+
+                            let jsonLine = trimmedLine.startsWith('data: ') ? trimmedLine.slice(6).trim() : trimmedLine;
+                            if (jsonLine === '[DONE]' || jsonLine === '') continue;
+
+                            const parsed = JSON.parse(jsonLine);
+                            const content = extractStreamContent(parsed, model);
+
+                            if (content) {
+                                hasReceivedData = true;
+                                accumulatedResponse += content;
+                                updateCallback(accumulatedResponse);
+                            }
+                        } catch (e) {
+                            // 파싱 에러 무시
+                        }
+                    }
                 }
             }
+        } catch (error) {
+            console.error('스트리밍 응답 처리 중 에러:', error);
+            throw error;
         }
 
         return accumulatedResponse;
     }
 
-    // 응답 내용 추출 함수
-    function extractResponseContent(parsed) {
-        if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
-            return parsed.choices[0].delta.content;
-        } else if (parsed.event_type === 'text-generation' && parsed.text) {
-            return parsed.text;
+    // Gemini 스트리밍 처리 헬퍼 함수 (Robust Parsing)
+    function processGeminiStream(buffer, model, currentResponse, updateCallback) {
+        let remainingBuffer = buffer;
+        let accumulatedResponse = currentResponse;
+        let hasNewData = false;
+        let processed = false;
+
+        let braceCount = 0;
+        let startIdx = -1;
+        let jsonStrings = [];
+        let inString = false;
+        let isEscaped = false;
+
+        for (let i = 0; i < buffer.length; i++) {
+            const char = buffer[i];
+
+            if (isEscaped) {
+                isEscaped = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                isEscaped = true;
+                continue;
+            }
+
+            if (char === '"') {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString) {
+                if (char === '{') {
+                    if (braceCount === 0) startIdx = i;
+                    braceCount++;
+                } else if (char === '}') {
+                    braceCount--;
+                    if (braceCount === 0 && startIdx !== -1) {
+                        let jsonStr = buffer.substring(startIdx, i + 1);
+                        jsonStrings.push(jsonStr);
+                        startIdx = -1;
+                    }
+                }
+            }
         }
-        return '';
+
+        if (jsonStrings.length > 0) {
+            processed = true;
+
+            for (const jsonStr of jsonStrings) {
+                try {
+                    let cleanJson = jsonStr.trim();
+                    if (cleanJson.startsWith('data:')) {
+                        cleanJson = cleanJson.replace(/^data:\s*/, '').trim();
+                    }
+
+                    if (cleanJson === '' || cleanJson === '[DONE]') continue;
+
+                    const parsed = JSON.parse(cleanJson);
+
+                    if (parsed.error) {
+                        console.error('Gemini API 에러:', parsed.error);
+                        throw new Error(`Gemini API 에러: ${parsed.error.message || JSON.stringify(parsed.error)}`);
+                    }
+
+                    const content = extractStreamContent(parsed, model);
+                    if (content && content.length > 0) {
+                        hasNewData = true;
+                        accumulatedResponse += content;
+                        updateCallback(accumulatedResponse);
+                    }
+                } catch (parseError) {
+                    if (jsonStrings.indexOf(jsonStr) < 3) {
+                        console.warn('JSON 파싱 실패:', parseError.message);
+                    }
+                }
+            }
+
+            if (jsonStrings.length > 0) {
+                const lastJson = jsonStrings[jsonStrings.length - 1];
+                const lastJsonEnd = buffer.lastIndexOf(lastJson) + lastJson.length;
+                remainingBuffer = buffer.substring(lastJsonEnd);
+            }
+        } else {
+            const lines = buffer.split('\n');
+            if (lines.length > 1) {
+                processed = true;
+                remainingBuffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine === '') continue;
+
+                    try {
+                        let jsonLine = trimmedLine;
+                        if (jsonLine.startsWith('data: ')) {
+                            jsonLine = jsonLine.slice(6).trim();
+                        }
+                        if (jsonLine === '[DONE]' || jsonLine === '') continue;
+
+                        const parsed = JSON.parse(jsonLine);
+                        const content = extractStreamContent(parsed, model);
+                        if (content && content.length > 0) {
+                            hasNewData = true;
+                            accumulatedResponse += content;
+                            updateCallback(accumulatedResponse);
+                        }
+                    } catch (e) {
+                        // 파싱 에러 무시
+                    }
+                }
+            }
+        }
+
+        return {
+            processed,
+            remainingBuffer,
+            accumulatedResponse,
+            hasNewData
+        };
+    }
+
+    // 스트리밍 컨텐츠 추출 함수
+    function extractStreamContent(parsed, model) {
+        if (model === 'Cerebras') {
+            return parsed.choices?.[0]?.delta?.content || '';
+        } else if (model === 'mistralSmall') {
+            return parsed.choices?.[0]?.delta?.content || '';
+        } else if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash') {
+            try {
+                if (!parsed.candidates || !Array.isArray(parsed.candidates) || parsed.candidates.length === 0) {
+                    return '';
+                }
+                const candidate = parsed.candidates[0];
+                if (!candidate.content || !candidate.content.parts) {
+                    return '';
+                }
+                return candidate.content.parts.map(part => part.text || '').join('');
+            } catch (error) {
+                console.error('extractStreamContent 에러 (Gemini):', error);
+                return '';
+            }
+        } else if (model === 'groq') {
+            return parsed.choices?.[0]?.delta?.content || '';
+        } else {
+            return parsed.event_type === 'text-generation' ? parsed.text : '';
+        }
+    }
+
+    // 응답 내용 추출 함수 (비스트리밍용 유지)
+    function extractResponseContent(parsed) {
+        return extractStreamContent(parsed, 'default');
     }
 
     // 메시지 전송 함수
@@ -190,15 +380,20 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await makeAPIRequest(config, message);
             let aiResponse;
 
-            if (config.isStreaming) {
-                aiResponse = await handleStreamingResponse(response, updateAIMessage);
+            // 응답 헤더 확인
+            const contentType = response.headers.get('content-type');
+            const isGeminiModel = config.model.startsWith('gemini') || config.model === 'gemini20Flash' || config.model === 'gemini25Flash';
+            const isActuallyStreaming = config.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel);
+
+            if (isActuallyStreaming) {
+                aiResponse = await handleStreamingResponse(response, config.model, updateAIMessage);
             } else {
                 const data = await response.json();
                 aiResponse = extractNonStreamingResponse(data, config.model);
             }
 
             updateAIMessage(aiResponse);
-            conversationHistory.push({role: "Chatbot", message: aiResponse});
+            conversationHistory.push({ role: "Chatbot", message: aiResponse });
             addModelNameToLastMessage(config.model);
         } catch (error) {
             console.error('Error:', error);
@@ -210,21 +405,24 @@ document.addEventListener('DOMContentLoaded', function() {
     async function getAPIConfig() {
         return new Promise((resolve) => {
             chrome.storage.sync.get([
-                'cohereApiKey', 
-                'mistralApiKey', 
-                'geminiApiKey', 
-                'geminiflashApiKey', 
+                'cohereApiKey',
+                'mistralApiKey',
+                'geminiApiKey',
+                'geminiflashApiKey',
+                'gemini25FlashApiKey',
+                'google20FlashApiKey',
+                'gemini20FlashModelName',
                 'groqApiKey',
-                'cerebrasApiKey',  // Cerebras API 키 추가
-                'cerebrasModel',   // Cerebras 모델 추가
-                'selectedModel', 
+                'cerebrasApiKey',
+                'cerebrasModel',
+                'selectedModel',
                 'instructions'
-            ], function(result) {
-                if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey && 
-                    !result.geminiflashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
+            ], function (result) {
+                if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey &&
+                    !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
                     throw new Error("API 키를 설정해주세요.");
                 }
-    
+
                 const contextMessage = `현재 웹페이지의 내용: ${pageContent}`;
                 const config = {
                     model: result.selectedModel,
@@ -282,27 +480,100 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         config.isStreaming = false;
                         break;
-                        // getAPIConfig 함수 내의 switch 문에 Cerebras 케이스 추가
+                    case 'gemini20Flash': {
+                        const gemini20ApiKey = result.google20FlashApiKey;
+                        if (!gemini20ApiKey) {
+                            throw new Error('Gemini 2.0 Flash API 키가 설정되지 않았습니다.');
+                        }
+                        const modelName = result.gemini20FlashModelName || 'gemini-2.0-flash';
+                        config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${gemini20ApiKey.trim()}`;
+                        config.headers = {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': gemini20ApiKey.trim()
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                role: "user",
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: {
+                                temperature: 0.7,
+                                topK: 40,
+                                topP: 0.95,
+                                maxOutputTokens: 8192
+                            }
+                        });
+                        config.isStreaming = true;
+                        break;
+                    }
+                    case 'gemini25Flash': {
+                        const gemini25ApiKey = result.gemini25FlashApiKey;
+                        if (!gemini25ApiKey) {
+                            throw new Error('Gemini 2.5 Flash API 키가 설정되지 않았습니다.');
+                        }
+                        const modelName = 'gemini-2.5-flash';
+                        // Gemini 2.5 Flash 스트리밍 엔드포인트
+                        config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${gemini25ApiKey.trim()}`;
+                        config.headers = {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': gemini25ApiKey.trim()
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: {
+                                temperature: 0,
+                                thinkingConfig: {
+                                    thinkingBudget: 0
+                                }
+                            },
+                            safetySettings: [
+                                {
+                                    category: "HARM_CATEGORY_HATE_SPEECH",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_HARASSMENT",
+                                    threshold: "BLOCK_NONE"
+                                }
+                            ]
+                        });
+                        config.isStreaming = true;
+                        break;
+                    }
                     case 'Cerebras':
                         if (!result.cerebrasApiKey) {
                             throw new Error("Cerebras API 키가 설정되지 않았습니다.");
                         }
-                        
+
                         config.url = 'https://api.cerebras.ai/v1/chat/completions';
                         config.headers = {
                             'Authorization': `Bearer ${result.cerebrasApiKey}`,
                             'Content-Type': 'application/json'
                         };
-                        
+
                         // 대화 기록 길이 제한
                         const maxHistoryLength = 5; // 최근 5개의 대화만 유지
                         const limitedHistory = conversationHistory.slice(-maxHistoryLength);
-                        
+
                         config.body = (msg) => {
                             // 메시지 길이 체크
                             const fullMessage = `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}`;
                             const truncatedMessage = fullMessage.length > 7000 ? fullMessage.substring(0, 7000) : fullMessage;
-                            
+
                             return JSON.stringify({
                                 model: result.cerebrasModel || 'llama3.1-8b',
                                 messages: [
@@ -353,7 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.choices && data.choices.length > 0 && data.choices[0].message) {
                 return data.choices[0].message.content;
             }
-        } else if (model.startsWith('gemini')) {
+        } else if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash') {
             if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
                 return data.candidates[0].content.parts.map(part => part.text).join('');
             }
@@ -372,7 +643,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 이벤트 리스너 설정
     sendButton.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', function(e) {
+    userInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') sendMessage();
     });
 });
@@ -380,7 +651,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // 컨텐츠 스크립트 메시지 리스너
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "getPageContent") {
-        sendResponse({content: document.body.innerText});
+        sendResponse({ content: document.body.innerText });
     }
     return true;
 });
