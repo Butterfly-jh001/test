@@ -187,6 +187,10 @@ This project is under the MIT License.
 
 ### Version History
 
+**v1.3.2 (November 23, 2025)**
+- Gemini 2.5 flash 추가 (Gemini 추가작업 antigravity // 지연오류해결 cursor)
+- Add Gemini 2.5 Flash (Gemini integration work : antigravity //  latency/error fixes : cursor)
+
 **v1.3.1 (November 13, 2025)**
 - Modify copy method when copying summary or answer results
 - 요약, 답변 결과 복사할 때 복사 방식 수정
