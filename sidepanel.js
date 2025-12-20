@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const { done, value } = await reader.read();
                 if (done) {
                     // 버퍼에 남은 데이터 처리 시도 (Gemini)
-                    if (buffer.trim() && (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash')) {
+                    if (buffer.trim() && (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash' || model === 'gemini3Flash')) {
                         try {
                             const finalResult = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
                             if (finalResult.hasNewData) {
@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 buffer += chunk;
 
                 // Gemini의 경우 JSON 객체 단위로 파싱 시도
-                if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash') {
+                if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash' || model === 'gemini3Flash') {
                     const processResult = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
                     if (processResult.processed) {
                         buffer = processResult.remainingBuffer;
@@ -339,7 +339,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return parsed.choices?.[0]?.delta?.content || '';
         } else if (model === 'mistralSmall') {
             return parsed.choices?.[0]?.delta?.content || '';
-        } else if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash') {
+        } else if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash' || model === 'gemini3Flash') {
             try {
                 if (!parsed.candidates || !Array.isArray(parsed.candidates) || parsed.candidates.length === 0) {
                     return '';
@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // 응답 헤더 확인
             const contentType = response.headers.get('content-type');
-            const isGeminiModel = config.model.startsWith('gemini') || config.model === 'gemini20Flash' || config.model === 'gemini25Flash';
+            const isGeminiModel = config.model.startsWith('gemini') || config.model === 'gemini20Flash' || config.model === 'gemini25Flash' || config.model === 'gemini3Flash';
             const isActuallyStreaming = config.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel);
 
             if (isActuallyStreaming) {
@@ -410,6 +410,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 'geminiApiKey',
                 'geminiflashApiKey',
                 'gemini25FlashApiKey',
+                'gemini3FlashApiKey',
                 'google20FlashApiKey',
                 'gemini20FlashModelName',
                 'groqApiKey',
@@ -419,7 +420,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 'instructions'
             ], function (result) {
                 if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey &&
-                    !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
+                    !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.gemini3FlashApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
                     throw new Error("API 키를 설정해주세요.");
                 }
 
@@ -554,6 +555,52 @@ document.addEventListener('DOMContentLoaded', function () {
                         config.isStreaming = true;
                         break;
                     }
+                    case 'gemini3Flash': {
+                        const gemini3ApiKey = result.gemini3FlashApiKey;
+                        if (!gemini3ApiKey) {
+                            throw new Error('Gemini 3.0 Flash API 키가 설정되지 않았습니다.');
+                        }
+                        const modelName = 'gemini-3-flash-preview';
+                        // Gemini 3.0 Flash 스트리밍 엔드포인트
+                        config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${gemini3ApiKey.trim()}`;
+                        config.headers = {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': gemini3ApiKey.trim()
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: {
+                                temperature: 0,
+                                thinkingConfig: {
+                                    thinkingBudget: 0
+                                }
+                            },
+                            safetySettings: [
+                                {
+                                    category: "HARM_CATEGORY_HATE_SPEECH",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_HARASSMENT",
+                                    threshold: "BLOCK_NONE"
+                                }
+                            ]
+                        });
+                        config.isStreaming = true;
+                        break;
+                    }
                     case 'Cerebras':
                         if (!result.cerebrasApiKey) {
                             throw new Error("Cerebras API 키가 설정되지 않았습니다.");
@@ -624,7 +671,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.choices && data.choices.length > 0 && data.choices[0].message) {
                 return data.choices[0].message.content;
             }
-        } else if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash') {
+        } else if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash' || model === 'gemini3Flash') {
             if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
                 return data.candidates[0].content.parts.map(part => part.text).join('');
             }

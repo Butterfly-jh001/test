@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var cerebrasModelRadios = document.querySelectorAll('input[name="cerebrasModel"]');
     var google20FlashApiKeyInput = document.getElementById('google20FlashApiKey');
     var gemini25FlashApiKeyInput = document.getElementById('gemini25FlashApiKey');
+    var gemini3FlashApiKeyInput = document.getElementById('gemini3FlashApiKey');
 
     var aiModelSelect = document.getElementById('aiModel');
     var saveButton = document.getElementById('save');
@@ -54,6 +55,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     apiKeyGoogle20FlashPlaceholder: 'Google 2.0 플래시 API 키를 입력하세요',
                     apiKeyGemini25Flash: 'Google 2.5 플래시 API 키:',
                     apiKeyGemini25FlashPlaceholder: 'Google 2.5 플래시 API 키를 입력하세요',
+                    apiKeyGoogle30Flash: 'Google 3.0 플래시 API 키:',
+                    apiKeyGoogle30FlashPlaceholder: 'Google 3.0 플래시 API 키를 입력하세요',
                 },
                 en: {
                     title: 'AI Summary Extension Settings',
@@ -70,6 +73,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     apiKeyGoogle20FlashPlaceholder: 'Enter Google 2.0 Flash API Key',
                     apiKeyGemini25Flash: 'Google 2.5 Flash API Key:',
                     apiKeyGemini25FlashPlaceholder: 'Enter Google 2.5 Flash API Key',
+                    apiKeyGoogle30Flash: 'Google 3.0 Flash API Key:',
+                    apiKeyGoogle30FlashPlaceholder: 'Enter Google 3.0 Flash API Key',
                 }
             };
 
@@ -88,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const apiInputs = document.querySelectorAll('input[type="text"][id$="ApiKey"]');
             apiInputs.forEach(input => {
                 // General placeholder for most API keys, exclude the new one which has specific translations
-                if (input.id !== 'google20FlashApiKey' && input.id !== 'gemini25FlashApiKey' && input.id !== 'ollamaModelName' && input.id !== 'instructionInput') {
+                if (input.id !== 'google20FlashApiKey' && input.id !== 'gemini25FlashApiKey' && input.id !== 'gemini3FlashApiKey' && input.id !== 'ollamaModelName' && input.id !== 'instructionInput') {
                     input.placeholder = translations[lang].apiKeyPlaceholder;
                 }
             });
@@ -110,6 +115,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             if (gemini25FlashApiKeyInput) {
                 gemini25FlashApiKeyInput.placeholder = translations[lang].apiKeyGemini25FlashPlaceholder || 'Enter Google 2.5 Flash API Key';
+            }
+
+            // Specific translations for Gemini 3.0 Flash
+            const gemini3FlashLabel = document.querySelector('label[for="gemini3FlashApiKey"]');
+            if (gemini3FlashLabel) {
+                gemini3FlashLabel.textContent = translations[lang].apiKeyGoogle30Flash || 'Google 3.0 Flash API Key:';
+            }
+            if (gemini3FlashApiKeyInput) {
+                gemini3FlashApiKeyInput.placeholder = translations[lang].apiKeyGoogle30FlashPlaceholder || 'Enter Google 3.0 Flash API Key';
             }
         });
     }
@@ -138,6 +152,11 @@ document.addEventListener('DOMContentLoaded', function () {
             gemini25FlashApiKeyInput.value = data.gemini25FlashApiKey || '';
         }
 
+        // gemini3FlashApiKey 설정
+        if (gemini3FlashApiKeyInput) {
+            gemini3FlashApiKeyInput.value = data.gemini3FlashApiKey || '';
+        }
+
         // AI 모델 선택값 설정
         aiModelSelect.value = data.selectedModel || 'cohere';
 
@@ -157,6 +176,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const geminiflashSection = document.getElementById('geminiflashApiSection');
         const gemini20FlashSection = document.getElementById('gemini20FlashApiSection');
         const gemini25FlashSection = document.getElementById('gemini25FlashApiSection');
+        const gemini3FlashSection = document.getElementById('gemini3FlashApiSection');
         const groqSection = document.getElementById('groqApiSection');
         const ollamaSection = document.getElementById('ollamaApiSection');
         const ollamaModelNameSection = document.getElementById('ollamaModelNameSection');
@@ -169,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (geminiflashSection) geminiflashSection.style.display = 'none';
         if (gemini20FlashSection) gemini20FlashSection.style.display = 'none';
         if (gemini25FlashSection) gemini25FlashSection.style.display = 'none';
+        if (gemini3FlashSection) gemini3FlashSection.style.display = 'none';
         if (groqSection) groqSection.style.display = 'none';
         if (ollamaSection) ollamaSection.style.display = 'none';
         if (ollamaModelNameSection) ollamaModelNameSection.style.display = 'none';
@@ -198,6 +219,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     gemini25FlashSection.style.display = 'block';
                 }
                 break;
+            case 'gemini3Flash':
+                if (gemini3FlashSection) {
+                    gemini3FlashSection.style.display = 'block';
+                }
+                break;
             case 'groq':
                 if (groqSection) groqSection.style.display = 'block';
                 break;
@@ -219,6 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
         'geminiflashApiKey',
         'google20FlashApiKey',
         'gemini25FlashApiKey',
+        'gemini3FlashApiKey',
         'groqApiKey',
         'ollamaApiKey',
         'ollamaModelName',
@@ -241,6 +268,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var cerebrasApiKey = cerebrasApiKeyInput.value.trim();
         var google20FlashApiKey = google20FlashApiKeyInput ? google20FlashApiKeyInput.value.trim() : '';
         var gemini25FlashApiKey = gemini25FlashApiKeyInput ? gemini25FlashApiKeyInput.value.trim() : '';
+        var gemini3FlashApiKey = gemini3FlashApiKeyInput ? gemini3FlashApiKeyInput.value.trim() : '';
         var selectedModel = aiModelSelect.value;
         var cerebrasModel;
 
@@ -257,6 +285,7 @@ document.addEventListener('DOMContentLoaded', function () {
             geminiflashApiKey: geminiflashApiKey,
             google20FlashApiKey: google20FlashApiKey,
             gemini25FlashApiKey: gemini25FlashApiKey,
+            gemini3FlashApiKey: gemini3FlashApiKey,
             groqApiKey: groqApiKey,
             ollamaApiKey: ollamaApiKey,
             ollamaModelName: ollamaModelName,

@@ -122,9 +122,9 @@ async function sendToAI(text, instruction) {
     try {
         const result = await chrome.storage.sync.get([
             'cohereApiKey', 'mistralApiKey', 'geminiApiKey',
-            'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey',
+            'geminiflashApiKey', 'groqApiKey',             'cerebrasApiKey',
             'cerebrasModel', 'selectedModel', 'instructions', 'google20FlashApiKey',
-            'gemini25FlashApiKey'
+            'gemini25FlashApiKey', 'gemini3FlashApiKey'
         ]);
 
         const instructions = result.instructions || [];
@@ -303,7 +303,7 @@ async function sendToAI(text, instruction) {
             }
 
             let aiResponse;
-            const isGeminiModel = result.selectedModel.startsWith('gemini') || result.selectedModel === 'gemini20Flash' || result.selectedModel === 'gemini25Flash';
+            const isGeminiModel = result.selectedModel.startsWith('gemini') || result.selectedModel === 'gemini20Flash' || result.selectedModel === 'gemini25Flash' || result.selectedModel === 'gemini3Flash';
             const isActuallyStreaming = apiConfig.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel);
 
             if (isActuallyStreaming) {
@@ -382,7 +382,7 @@ async function handleStreamingResponse(response, model, updateCallback) {
             const readEndTime = performance.now();
             
             if (done) {
-                if (buffer.trim() && (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash')) {
+                if (buffer.trim() && (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash' || model === 'gemini3Flash')) {
                     try {
                         const finalResult = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
                         if (finalResult.hasNewData) {
@@ -405,7 +405,7 @@ async function handleStreamingResponse(response, model, updateCallback) {
             const chunk = decoder.decode(value, { stream: true });
             buffer += chunk;
 
-            if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash') {
+            if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash' || model === 'gemini3Flash') {
                 const processResult = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
                 if (processResult.processed) {
                     buffer = processResult.remainingBuffer;
@@ -755,6 +755,54 @@ async function getAPIConfig(result, instruction, text) {
                 config.modelName = modelName;
                 break;
             }
+            case 'gemini3Flash': {
+                const apiKey = result.gemini3FlashApiKey?.trim();
+                if (!apiKey) {
+                    throw new Error('Gemini 3.0 Flash API 키가 설정되지 않았습니다.');
+                }
+                const modelName = 'gemini-3-flash-preview';
+                // Gemini 3.0 Flash 스트리밍 엔드포인트
+                config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`;
+                config.headers = {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                };
+                const requestBody = {
+                    contents: [{
+                        parts: [{
+                            text: `${config.instructions}\n${contextMessage}\n\n${instruction}`
+                        }]
+                    }],
+                    generationConfig: {
+                        temperature: 0,
+                        thinkingConfig: {
+                            thinkingBudget: 0
+                        }
+                    },
+                    safetySettings: [
+                        {
+                            category: "HARM_CATEGORY_HATE_SPEECH",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_HARASSMENT",
+                            threshold: "BLOCK_NONE"
+                        }
+                    ]
+                };
+                config.body = JSON.stringify(requestBody);
+                config.isStreaming = true;
+                config.modelName = modelName;
+                break;
+            }
             case 'groq':
                 config.url = 'https://api.groq.com/openai/v1/chat/completions';
                 config.headers = {
@@ -831,7 +879,7 @@ function extractStreamContent(parsed, model) {
         return parsed.choices?.[0]?.delta?.content || '';
     } else if (model === 'mistralSmall') {
         return parsed.choices?.[0]?.delta?.content || '';
-    } else if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash') {
+    } else if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash' || model === 'gemini3Flash') {
         try {
             if (!parsed.candidates || !Array.isArray(parsed.candidates) || parsed.candidates.length === 0) {
                 return '';
@@ -865,7 +913,7 @@ function extractResponseContent(data, model) {
         console.error("Unexpected Cerebras API response format:", data);
         return "Cerebras API 응답을 처리할 수 없습니다.";
     }
-    if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash') {
+    if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash' || model === 'gemini3Flash') {
         return data.candidates?.[0]?.content?.parts?.map(part => part.text).join('') || '';
     } else if (model === 'groq') {
         return data.choices?.[0]?.message?.content || '';
