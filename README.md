@@ -187,7 +187,7 @@ This project is under the MIT License.
 
 ### Version History
 
-**v1.4 (November 23, 2025)**
+**v1.4 (December 20, 2025)**
 - Gemini 3 Flash (preview) 추가 (Cursor에서 한 번에 작업완료)
 - Added Gemini 3 Flash (preview) (One-shot task completion in Cursor)
 
