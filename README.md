@@ -187,9 +187,13 @@ This project is under the MIT License.
 
 ### Version History
 
+**v1.4 (November 23, 2025)**
+- Gemini 3 Flash (preview) 추가 (Cursor에서 한 번에 작업완료)
+- Added Gemini 3 Flash (preview) (One-shot task completion in Cursor)
+
 **v1.3.2 (November 23, 2025)**
-- Gemini 2.5 flash 추가 (Gemini 추가작업 antigravity // 지연오류해결 cursor)
-- Add Gemini 2.5 Flash (Gemini integration work : antigravity //  latency/error fixes : cursor)
+- Gemini 2.5 Flash 추가 (Gemini 추가작업 antigravity // 지연오류해결 cursor)
+- Added Gemini 2.5 Flash (Gemini integration work : antigravity //  latency/error fixes : cursor)
 
 **v1.3.1 (November 13, 2025)**
 - Modify copy method when copying summary or answer results
