@@ -304,7 +304,8 @@ async function sendToAI(text, instruction) {
 
             let aiResponse;
             const isGeminiModel = result.selectedModel.startsWith('gemini') || result.selectedModel === 'gemini20Flash' || result.selectedModel === 'gemini25Flash' || result.selectedModel === 'gemini3Flash';
-            const isActuallyStreaming = apiConfig.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel);
+            const isCohereModel = result.selectedModel === 'cohere';
+            const isActuallyStreaming = apiConfig.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel || isCohereModel);
 
             if (isActuallyStreaming) {
                 console.log('스트리밍 응답 처리 시작, Content-Type:', contentType);
@@ -861,7 +862,7 @@ async function getAPIConfig(result, instruction, text) {
                 config.headers = {
                     'Authorization': `Bearer ${result.cohereApiKey.trim()}`,
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json'
+                    'Accept': 'text/event-stream'
                 };
                 config.body = JSON.stringify({
                     message: `${config.instructions}\n${contextMessage}\n\n${instruction}`,

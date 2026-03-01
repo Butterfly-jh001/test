@@ -383,7 +383,8 @@ document.addEventListener('DOMContentLoaded', function () {
             // 응답 헤더 확인
             const contentType = response.headers.get('content-type');
             const isGeminiModel = config.model.startsWith('gemini') || config.model === 'gemini20Flash' || config.model === 'gemini25Flash' || config.model === 'gemini3Flash';
-            const isActuallyStreaming = config.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel);
+            const isCohereModel = config.model === 'cohere';
+            const isActuallyStreaming = config.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel || isCohereModel);
 
             if (isActuallyStreaming) {
                 aiResponse = await handleStreamingResponse(response, config.model, updateAIMessage);
@@ -650,7 +651,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         config.headers = {
                             'Authorization': `Bearer ${result.cohereApiKey.trim()}`,
                             'Content-Type': 'application/json',
-                            'Accept': 'application/json'
+                            'Accept': 'text/event-stream'
                         };
                         config.body = (msg) => JSON.stringify({
                             message: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`,
