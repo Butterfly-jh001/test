@@ -412,6 +412,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 'geminiflashApiKey',
                 'gemini25FlashApiKey',
                 'gemini3FlashApiKey',
+                'gemini31FlashLiteApiKey',
                 'google20FlashApiKey',
                 'gemini20FlashModelName',
                 'groqApiKey',
@@ -421,7 +422,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 'instructions'
             ], function (result) {
                 if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey &&
-                    !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.gemini3FlashApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
+                    !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.gemini3FlashApiKey &&
+                    !result.gemini31FlashLiteApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
                     throw new Error("API 키를 설정해주세요.");
                 }
 
@@ -567,6 +569,52 @@ document.addEventListener('DOMContentLoaded', function () {
                         config.headers = {
                             'Content-Type': 'application/json',
                             'x-goog-api-key': gemini3ApiKey.trim()
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: {
+                                temperature: 0,
+                                thinkingConfig: {
+                                    thinkingBudget: 0
+                                }
+                            },
+                            safetySettings: [
+                                {
+                                    category: "HARM_CATEGORY_HATE_SPEECH",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_HARASSMENT",
+                                    threshold: "BLOCK_NONE"
+                                }
+                            ]
+                        });
+                        config.isStreaming = true;
+                        break;
+                    }
+                    case 'gemini31FlashLite': {
+                        const gemini31ApiKey = result.gemini31FlashLiteApiKey;
+                        if (!gemini31ApiKey) {
+                            throw new Error('Gemini 3.1 Flash Lite API 키가 설정되지 않았습니다.');
+                        }
+                        const modelName = 'gemini-3.1-flash-lite-preview';
+                        // Gemini 3.1 Flash Lite 스트리밍 엔드포인트
+                        config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${gemini31ApiKey.trim()}`;
+                        config.headers = {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': gemini31ApiKey.trim()
                         };
                         config.body = (msg) => JSON.stringify({
                             contents: [{

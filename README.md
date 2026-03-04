@@ -9,7 +9,7 @@ Cohere
 
 Groq
 
-Gemini (pro) / Flash / 2.0 Flash 추가 (2025-06-05)
+Gemini (pro) / Flash
 
 cerebras
 
@@ -28,7 +28,7 @@ including
 Mistral, 
 Cohere, 
 Groq, 
-Gemini (pro), and Flash, 2.0 flash
+Gemini (pro), and Flash. 
 
 All of these models offer free API usage. 
 
@@ -45,8 +45,7 @@ For Korean
 이 크롬 확장프로그램은 웹페이지의 내용을 빠르게 요약해주는 도구입니다. 사용자가 원하는 웹페이지의 내용을 AI를 활용하여 간편하게 요약하고, 사이드패널을 통해 대화형 인터페이스를 제공합니다.
 
 ### 주요 기능
-- 컨텍스트 메뉴를 통한 웹페이지 요약 (일반 요약) (2025-08-13)
-- 요약 내용에 마크다운 렌더링 적용 (2025-08-13)
+- 컨텍스트 메뉴를 통한 웹페이지 요약
 - 사이드패널을 활용한 대화형 인터페이스
 - 사용자 맞춤형 웹페이지 콘텐츠 요약
 
@@ -74,10 +73,6 @@ background.js
 content.js
 
 manifest.json
-
-markdown.css
-
-markdownRenderer.js
 
 options.html
 
@@ -123,8 +118,7 @@ sidepanel.js
 This Chrome extension is a tool that quickly summarizes webpage content. It utilizes AI to easily summarize content from desired webpages and provides a conversational interface through a side panel.
 
 ### Key Features
-- Webpage summarization via context menu (General Summary) (August 13, 2025)
-- Markdown rendering for summarized content (August 13, 2025)
+- Webpage summarization via context menu
 - Conversational interface using side panel
 - Personalized webpage content summarization
 
@@ -186,38 +180,7 @@ This project is under the MIT License.
 - [List major dependencies if any]
 
 ### Version History
-**v1.4.1 (March 1, 2026)**
-- Fixing a Cohere error.  (Cursor에서 한 번에 작업완료)
-
-**v1.4 (December 20, 2025)**
-- Gemini 3 Flash (preview) 추가 (Cursor에서 한 번에 작업완료)
-- Added Gemini 3 Flash (preview) (One-shot task completion in Cursor)
-
-**v1.3.2 (November 23, 2025)**
-- Gemini 2.5 Flash 추가 (Gemini 추가작업 antigravity // 지연오류해결 cursor)
-- Added Gemini 2.5 Flash (Gemini integration work : antigravity //  latency/error fixes : cursor)
-
-**v1.3.1 (November 13, 2025)**
-- Modify copy method when copying summary or answer results
-- 요약, 답변 결과 복사할 때 복사 방식 수정
-
-**v1.3 (November 10, 2025)**
-- Gemini endpoint updated
-- Gemini 엔드포인트 수정
-
-**v1.2 (November 07, 2025)**
-- Updated previously unusable models, excluding Ollama.
-- 사용 불가능했던 모델들에 대한 업데이트, Ollama 제외
-
-**v1.1 (August 13, 2025)**
-- Added 'General Summary' feature to the context menu.
-- Implemented Markdown rendering for summary results.
-- 컨텍스트 메뉴에 '일반 요약' 기능 추가
-- 요약 결과에 마크다운 렌더링 적용
-
-**v1.0 (Initial Release)**
-- Initial release
-- 초기 릴리즈
+- [Major version changes and updates]
 
 ## 📞 Contact
 - [Your contact information if you wish to include]

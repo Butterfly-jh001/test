@@ -124,7 +124,7 @@ async function sendToAI(text, instruction) {
             'cohereApiKey', 'mistralApiKey', 'geminiApiKey',
             'geminiflashApiKey', 'groqApiKey',             'cerebrasApiKey',
             'cerebrasModel', 'selectedModel', 'instructions', 'google20FlashApiKey',
-            'gemini25FlashApiKey', 'gemini3FlashApiKey'
+            'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey'
         ]);
 
         const instructions = result.instructions || [];
@@ -763,6 +763,54 @@ async function getAPIConfig(result, instruction, text) {
                 }
                 const modelName = 'gemini-3-flash-preview';
                 // Gemini 3.0 Flash 스트리밍 엔드포인트
+                config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`;
+                config.headers = {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                };
+                const requestBody = {
+                    contents: [{
+                        parts: [{
+                            text: `${config.instructions}\n${contextMessage}\n\n${instruction}`
+                        }]
+                    }],
+                    generationConfig: {
+                        temperature: 0,
+                        thinkingConfig: {
+                            thinkingBudget: 0
+                        }
+                    },
+                    safetySettings: [
+                        {
+                            category: "HARM_CATEGORY_HATE_SPEECH",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_HARASSMENT",
+                            threshold: "BLOCK_NONE"
+                        }
+                    ]
+                };
+                config.body = JSON.stringify(requestBody);
+                config.isStreaming = true;
+                config.modelName = modelName;
+                break;
+            }
+            case 'gemini31FlashLite': {
+                const apiKey = result.gemini31FlashLiteApiKey?.trim();
+                if (!apiKey) {
+                    throw new Error('Gemini 3.1 Flash Lite API 키가 설정되지 않았습니다.');
+                }
+                const modelName = 'gemini-3.1-flash-lite-preview';
+                // Gemini 3.1 Flash Lite 스트리밍 엔드포인트
                 config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`;
                 config.headers = {
                     'Content-Type': 'application/json',
