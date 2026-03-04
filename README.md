@@ -188,10 +188,10 @@ This project is under the MIT License.
 ### Version History
 
 **v1.5.0 (March 4, 2026)**
--Gemini 3.1 flash lite 추가. (Cursor에서 한 번에 작업완료)
+- Gemini 3.1 flash lite 추가. (Cursor에서 한 번에 작업완료)
 
 **v1.4.1 (March 1, 2026)**
--Fixing a Cohere error.  (Cursor에서 한 번에 작업완료)
+- Fixing a Cohere error.  (Cursor에서 한 번에 작업완료)
 
 **v1.4 (December 20, 2025)**
 - Gemini 3 Flash (preview) 추가 (Cursor에서 한 번에 작업완료)
