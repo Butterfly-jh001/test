@@ -188,7 +188,7 @@ This project is under the MIT License.
 ### Version History
 
 **v1.5.1 (March 19, 2026)**
-- Cerebras error fix (Cursor에서 작업완료)
+- Fixing a Cerebras error (Cursor에서 작업완료)
 
 **v1.5.0 (March 4, 2026)**
 - Gemini 3.1 flash lite 추가. (Cursor에서 한 번에 작업완료)
