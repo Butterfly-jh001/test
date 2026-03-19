@@ -118,6 +118,43 @@ function autoSelectNewsContent() {
 let retryAttempted = false;
 let lastMarkdownResult = "";
 
+function normalizeCerebrasModel(model) {
+    const fallback = 'llama3.1-8b';
+    if (!model || typeof model !== 'string') return fallback;
+
+    const trimmed = model.trim();
+    // Legacy / invalid IDs observed in the wild
+    if (trimmed === 'llama-3.3-70b') return fallback;
+    if (trimmed === 'gpt-oss-120b') return fallback;
+
+    return trimmed;
+}
+
+function isCerebrasModelNotFound(status, errorText) {
+    if (status !== 404) return false;
+    const text = (errorText || '').toString();
+    if (!text) return false;
+    return (
+        text.includes('"code":"model_not_found"') ||
+        text.includes('"type":"not_found_error"') ||
+        text.includes('Model ') && text.includes('does not exist')
+    );
+}
+
+function buildCerebrasRequestBody({ model, instructions, content }) {
+    return JSON.stringify({
+        model,
+        messages: [
+            { role: "system", content: instructions || '' },
+            { role: "user", content }
+        ],
+        stream: false,
+        temperature: 0.7,
+        max_completion_tokens: 1000,
+        top_p: 0.95
+    });
+}
+
 async function sendToAI(text, instruction) {
     try {
         const result = await chrome.storage.sync.get([
@@ -299,7 +336,30 @@ async function sendToAI(text, instruction) {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('API 요청 실패:', response.status, errorText);
-                throw new Error(`API 요청 실패 (${response.status}): ${errorText}`);
+                // Cerebras 모델 미존재(404)인 경우, 안전한 기본 모델로 1회 폴백 재시도
+                if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(response.status, errorText)) {
+                    const fallbackModel = 'llama3.1-8b';
+                    const contextMessage = `현재 웹페이지의 내용: ${text}`;
+                    const contentForUser = `${contextMessage}\n\n${combinedInstruction}`;
+                    const fallbackBody = buildCerebrasRequestBody({
+                        model: fallbackModel,
+                        instructions: apiConfig.instructions,
+                        content: contentForUser
+                    });
+                    const retryResponse = await fetch(apiConfig.url, {
+                        method: 'POST',
+                        headers: apiConfig.headers,
+                        body: fallbackBody
+                    });
+                    if (!retryResponse.ok) {
+                        const retryErrorText = await retryResponse.text();
+                        throw new Error(`API 요청 실패 (${retryResponse.status}): ${retryErrorText}`);
+                    }
+                    const retryData = await retryResponse.json();
+                    aiResponse = extractResponseContent(retryData, result.selectedModel);
+                } else {
+                    throw new Error(`API 요청 실패 (${response.status}): ${errorText}`);
+                }
             }
 
             let aiResponse;
@@ -307,7 +367,7 @@ async function sendToAI(text, instruction) {
             const isCohereModel = result.selectedModel === 'cohere';
             const isActuallyStreaming = apiConfig.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel || isCohereModel);
 
-            if (isActuallyStreaming) {
+            if (!aiResponse && isActuallyStreaming) {
                 console.log('스트리밍 응답 처리 시작, Content-Type:', contentType);
                 try {
                     aiResponse = await handleStreamingResponse(response, result.selectedModel, updateAIMessage);
@@ -320,7 +380,7 @@ async function sendToAI(text, instruction) {
                     console.error('스트리밍 처리 중 에러:', streamError);
                     throw streamError;
                 }
-            } else {
+            } else if (!aiResponse) {
                 console.log('비스트리밍 응답 처리 시작, Content-Type:', contentType);
                 try {
                     const data = await response.json();
@@ -357,7 +417,26 @@ async function processSingleChunk(chunk, instruction, result) {
     });
 
     if (!response.ok) {
-        throw new Error(`청크 처리 중 오류 발생 (${response.status})`);
+        const errorText = await response.text();
+        if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(response.status, errorText)) {
+            const fallbackBody = buildCerebrasRequestBody({
+                model: 'llama3.1-8b',
+                instructions: apiConfig.instructions,
+                content: chunk
+            });
+            const retryResponse = await fetch(apiConfig.url, {
+                method: 'POST',
+                headers: apiConfig.headers,
+                body: fallbackBody
+            });
+            if (!retryResponse.ok) {
+                const retryErrorText = await retryResponse.text();
+                throw new Error(`청크 처리 중 오류 발생 (${retryResponse.status}): ${retryErrorText}`);
+            }
+            const retryData = await retryResponse.json();
+            return extractResponseContent(retryData, result.selectedModel);
+        }
+        throw new Error(`청크 처리 중 오류 발생 (${response.status}): ${errorText}`);
     }
 
     const data = await response.json();
@@ -613,7 +692,7 @@ async function getAPIConfig(result, instruction, text) {
                 'Content-Type': 'application/json'
             };
 
-            const selectedModel = result.cerebrasModel || 'llama-3.3-70b';
+            const selectedModel = normalizeCerebrasModel(result.cerebrasModel);
 
             config.body = JSON.stringify({
                 model: selectedModel,
@@ -885,7 +964,7 @@ async function getAPIConfig(result, instruction, text) {
                     'Content-Type': 'application/json'
                 };
 
-                const selectedModel = result.cerebrasModel || 'llama-3.3-70b';
+                const selectedModel = normalizeCerebrasModel(result.cerebrasModel);
 
                 config.body = JSON.stringify({
                     model: selectedModel,

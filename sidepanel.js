@@ -117,15 +117,65 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
+    function normalizeCerebrasModel(model) {
+        const fallback = 'llama3.1-8b';
+        if (!model || typeof model !== 'string') return fallback;
+        const trimmed = model.trim();
+        if (trimmed === 'llama-3.3-70b') return fallback;
+        if (trimmed === 'gpt-oss-120b') return fallback;
+        return trimmed;
+    }
+
+    function isCerebrasModelNotFound(status, errorText) {
+        if (status !== 404) return false;
+        const text = (errorText || '').toString();
+        if (!text) return false;
+        return (
+            text.includes('"code":"model_not_found"') ||
+            text.includes('"type":"not_found_error"') ||
+            (text.includes('Model ') && text.includes('does not exist'))
+        );
+    }
+
+    function overrideRequestModel(bodyString, newModel) {
+        try {
+            const obj = JSON.parse(bodyString);
+            if (obj && typeof obj === 'object') {
+                obj.model = newModel;
+                return JSON.stringify(obj);
+            }
+        } catch (_) {
+            // ignore
+        }
+        return bodyString;
+    }
+
     // API 요청 함수
     async function makeAPIRequest(apiConfig, message) {
+        const bodyString = apiConfig.body(message);
         const response = await fetch(apiConfig.url, {
             method: 'POST',
             headers: apiConfig.headers,
-            body: apiConfig.body(message)
+            body: bodyString
         });
 
         if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+
+            // Cerebras 모델 미존재(404)인 경우, 안전한 기본 모델로 1회 폴백 재시도
+            if (apiConfig.model === 'Cerebras' && isCerebrasModelNotFound(response.status, errorText)) {
+                const fallbackBody = overrideRequestModel(bodyString, 'llama3.1-8b');
+                const retryResponse = await fetch(apiConfig.url, {
+                    method: 'POST',
+                    headers: apiConfig.headers,
+                    body: fallbackBody
+                });
+                if (!retryResponse.ok) {
+                    throw new Error(`HTTP error! status: ${retryResponse.status} - ${retryResponse.statusText}`);
+                }
+                return retryResponse;
+            }
+
             throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
         }
 
@@ -671,7 +721,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             const truncatedMessage = fullMessage.length > 7000 ? fullMessage.substring(0, 7000) : fullMessage;
 
                             return JSON.stringify({
-                                model: result.cerebrasModel || 'llama3.1-8b',
+                                model: normalizeCerebrasModel(result.cerebrasModel),
                                 messages: [
                                     {
                                         role: "system",
