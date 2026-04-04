@@ -187,6 +187,11 @@ This project is under the MIT License.
 
 ### Version History
 
+**v1.5.2 (April 4, 2026)**
+- Added Cerebras models support (Opencode(Big Pickle)에서 작업완료)
+qwen-3-235b-a22b-instruct-2507
+zai-glm-4.7
+
 **v1.5.1 (March 19, 2026)**
 - Fixing a Cerebras error (Cursor에서 작업완료)
 
