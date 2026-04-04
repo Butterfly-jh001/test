@@ -333,6 +333,8 @@ async function sendToAI(text, instruction) {
                 model: result.selectedModel
             });
 
+            let aiResponse;
+
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('API 요청 실패:', response.status, errorText);
@@ -362,7 +364,6 @@ async function sendToAI(text, instruction) {
                 }
             }
 
-            let aiResponse;
             const isGeminiModel = result.selectedModel.startsWith('gemini') || result.selectedModel === 'gemini20Flash' || result.selectedModel === 'gemini25Flash' || result.selectedModel === 'gemini3Flash';
             const isCohereModel = result.selectedModel === 'cohere';
             const isActuallyStreaming = apiConfig.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel || isCohereModel);
