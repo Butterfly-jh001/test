@@ -187,6 +187,10 @@ This project is under the MIT License.
 
 ### Version History
 
+**v1.6.0 (April 18, 2026)**
+- LM Studio option added, Ollama support available
+- Set the Windows environment variable OLLAMA_ORIGINS=*
+  
 **v1.5.2 (April 4, 2026)**
 - Added Cerebras models support (Opencode(Big Pickle)에서 작업완료)
 qwen-3-235b-a22b-instruct-2507
