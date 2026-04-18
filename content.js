@@ -5,6 +5,126 @@ function getPageContent() {
     return document.body.innerText;
 }
 
+/**
+ * CORS 우회: content script 대신 background service worker가 fetch를 수행한다.
+ * 스트리밍 응답은 background가 청크 단위로 fetchProxyChunk 메시지를 탭에 전송하고,
+ * 여기서 수신해 updateCallback을 실시간으로 호출한다.
+ *
+ * @param {string} url
+ * @param {object} options - { method, headers, body }
+ * @param {function|null} updateCallback - 스트리밍 중 누적 텍스트를 받는 콜백 (없으면 전체 텍스트 반환)
+ * @param {string} model - 스트림 파싱에 사용할 모델 ID
+ * @returns {Promise<string>} 최종 누적 응답 텍스트
+ */
+function fetchViaBackground(url, options = {}, updateCallback = null, model = '') {
+    return new Promise((resolve, reject) => {
+        // 이 요청을 식별할 고유 ID
+        const streamId = `stream_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+        let accumulatedResponse = '';
+        let buffer = '';
+        let chunkListener = null;
+
+        // 청크 메시지 수신 리스너 등록
+        chunkListener = (message) => {
+            if (message.action !== 'fetchProxyChunk' || message.streamId !== streamId) return;
+
+            if (message.error) {
+                chrome.runtime.onMessage.removeListener(chunkListener);
+                return reject(new Error(message.error));
+            }
+
+            if (!message.done) {
+                buffer += message.chunk;
+
+                if (updateCallback && model) {
+                    // 모델별 실시간 파싱
+                    if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash'
+                        || model === 'gemini3Flash' || model === 'gemini31FlashLite') {
+                        const result = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
+                        if (result.processed) {
+                            buffer = result.remainingBuffer;
+                            if (result.hasNewData) {
+                                accumulatedResponse = result.accumulatedResponse;
+                            }
+                        }
+                    } else {
+                        // SSE 라인 단위 파싱
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+                        for (const line of lines) {
+                            const trimmed = line.trim();
+                            if (!trimmed || trimmed === '[DONE]') continue;
+                            if (model === 'cohere' && trimmed.startsWith('event:')) continue;
+                            if (model === 'groq' && trimmed.startsWith(':')) continue;
+                            let jsonLine = trimmed.startsWith('data: ') ? trimmed.slice(6).trim() : trimmed;
+                            if (jsonLine === '[DONE]' || jsonLine === '') continue;
+                            try {
+                                const parsed = JSON.parse(jsonLine);
+                                const content = extractStreamContent(parsed, model);
+                                if (content) {
+                                    accumulatedResponse += content;
+                                    updateCallback(accumulatedResponse);
+                                }
+                            } catch (e) { /* 파싱 에러 무시 */ }
+                        }
+                    }
+                } else {
+                    // 콜백 없으면 그냥 누적
+                    accumulatedResponse += message.chunk;
+                }
+            } else {
+                // 스트림 종료
+                chrome.runtime.onMessage.removeListener(chunkListener);
+
+                // 버퍼에 남은 데이터 처리
+                if (buffer.trim() && updateCallback && model) {
+                    if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash'
+                        || model === 'gemini3Flash' || model === 'gemini31FlashLite') {
+                        const result = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
+                        if (result.hasNewData) accumulatedResponse = result.accumulatedResponse;
+                    }
+                }
+
+                resolve(accumulatedResponse);
+            }
+        };
+        chrome.runtime.onMessage.addListener(chunkListener);
+
+        // background에 요청 전송
+        chrome.runtime.sendMessage(
+            {
+                action: 'fetchProxy',
+                url,
+                method: options.method || 'POST',
+                headers: options.headers || {},
+                body: options.body || null,
+                streamId
+            },
+            (response) => {
+                if (chrome.runtime.lastError) {
+                    chrome.runtime.onMessage.removeListener(chunkListener);
+                    return reject(new Error(chrome.runtime.lastError.message));
+                }
+                if (!response) {
+                    chrome.runtime.onMessage.removeListener(chunkListener);
+                    return reject(new Error('background로부터 응답이 없습니다.'));
+                }
+                if (response.error) {
+                    chrome.runtime.onMessage.removeListener(chunkListener);
+                    return reject(new Error(response.error));
+                }
+                // 응답 실패 (4xx/5xx)
+                if (!response.ok) {
+                    chrome.runtime.onMessage.removeListener(chunkListener);
+                    return reject(new Error(`API 요청 실패 (${response.status}): ${response.text || ''}`));
+                }
+                // ok=true, done=false → 청크 수신 대기 중 (chunkListener가 처리)
+            }
+        );
+    });
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Message received in content script:', request);
 
@@ -159,9 +279,10 @@ async function sendToAI(text, instruction) {
     try {
         const result = await chrome.storage.sync.get([
             'cohereApiKey', 'mistralApiKey', 'geminiApiKey',
-            'geminiflashApiKey', 'groqApiKey',             'cerebrasApiKey',
+            'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey',
             'cerebrasModel', 'selectedModel', 'instructions', 'google20FlashApiKey',
-            'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey'
+            'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey',
+            'ollamaApiUrl', 'ollamaModelName', 'lmstudioApiUrl', 'lmstudioModelName'
         ]);
 
         const instructions = result.instructions || [];
@@ -172,17 +293,18 @@ async function sendToAI(text, instruction) {
         if (result.selectedModel === 'gemini' || result.selectedModel === 'geminiflash') {
             try {
                 const apiConfig = await getAPIConfig(result, instruction, text);
-                const response = await fetch(apiConfig.url, {
+                const proxyRes = await fetchViaBackground(apiConfig.url, {
                     method: 'POST',
                     headers: apiConfig.headers,
                     body: apiConfig.body
                 });
 
-                if (!response.ok) {
-                    throw new Error(`API 요청 실패 (${response.status})`);
+                if (!proxyRes.ok) {
+                    throw new Error(`API 요청 실패 (${proxyRes.status})`);
                 }
 
-                const data = await response.json();
+                let data;
+                try { data = JSON.parse(proxyRes.text); } catch(e) { throw new Error('응답 파싱 실패'); }
 
                 if (data.error || !data.candidates || data.candidates.length === 0) {
                     // 첫 시도에서 실패한 경우
@@ -261,21 +383,12 @@ async function sendToAI(text, instruction) {
                                 : instruction;
 
                             const apiConfig = await getAPIConfig(result, chunkInstruction, chunks[i]);
-                            const response = await fetch(apiConfig.url, {
-                                method: 'POST',
-                                headers: apiConfig.headers,
-                                body: apiConfig.body
-                            });
-
-                            if (!response.ok) {
-                                throw new Error(`청크 ${i + 1} 처리 실패 (${response.status}): ${await response.text()}`);
-                            }
-
-                            const chunkResponse = await handleStreamingResponse(response, 'groq', (partial) => {
-                                if (i === 0) {
-                                    updateAIMessage(partial);
-                                }
-                            });
+                            const chunkResponse = await fetchViaBackground(
+                                apiConfig.url,
+                                { method: 'POST', headers: apiConfig.headers, body: apiConfig.body },
+                                (partial) => { if (i === 0) updateAIMessage(partial); },
+                                'groq'
+                            );
 
                             if (chunks.length > 1) {
                                 fullResponse += `\n\n--- 청크 ${i + 1} 요약 ---\n${chunkResponse}`;
@@ -314,92 +427,81 @@ async function sendToAI(text, instruction) {
             const apiConfig = await getAPIConfig(result, combinedInstruction, text);
             console.log('API Config:', { url: apiConfig.url, isStreaming: apiConfig.isStreaming, model: result.selectedModel });
 
-            const requestStartTime = performance.now();
-            const response = await fetch(apiConfig.url, {
-                method: 'POST',
-                headers: apiConfig.headers,
-                body: apiConfig.body
-            });
-            const requestEndTime = performance.now();
-            const requestDuration = requestEndTime - requestStartTime;
-
-            // 응답 헤더 확인
-            const contentType = response.headers.get('content-type');
-            console.log(`[${result.selectedModel}] API 요청 시간: ${requestDuration.toFixed(2)}ms`);
-            console.log('응답 헤더:', {
-                status: response.status,
-                contentType: contentType,
-                isStreaming: apiConfig.isStreaming,
-                model: result.selectedModel
-            });
+            const isGeminiModel = result.selectedModel.startsWith('gemini') || result.selectedModel === 'gemini20Flash' || result.selectedModel === 'gemini25Flash' || result.selectedModel === 'gemini3Flash' || result.selectedModel === 'gemini31FlashLite';
+            const isCohereModel = result.selectedModel === 'cohere';
+            const willStream = apiConfig.isStreaming && (isGeminiModel || isCohereModel
+                || ['mistralSmall','groq','ollama','lmstudio'].includes(result.selectedModel));
 
             let aiResponse;
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('API 요청 실패:', response.status, errorText);
-                // Cerebras 모델 미존재(404)인 경우, 안전한 기본 모델로 1회 폴백 재시도
-                if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(response.status, errorText)) {
-                    const fallbackModel = 'llama3.1-8b';
-                    const contextMessage = `현재 웹페이지의 내용: ${text}`;
-                    const contentForUser = `${contextMessage}\n\n${combinedInstruction}`;
-                    const fallbackBody = buildCerebrasRequestBody({
-                        model: fallbackModel,
-                        instructions: apiConfig.instructions,
-                        content: contentForUser
-                    });
-                    const retryResponse = await fetch(apiConfig.url, {
-                        method: 'POST',
-                        headers: apiConfig.headers,
-                        body: fallbackBody
-                    });
-                    if (!retryResponse.ok) {
-                        const retryErrorText = await retryResponse.text();
-                        throw new Error(`API 요청 실패 (${retryResponse.status}): ${retryErrorText}`);
-                    }
-                    const retryData = await retryResponse.json();
-                    aiResponse = extractResponseContent(retryData, result.selectedModel);
-                } else {
-                    throw new Error(`API 요청 실패 (${response.status}): ${errorText}`);
-                }
-            }
-
-            const isGeminiModel = result.selectedModel.startsWith('gemini') || result.selectedModel === 'gemini20Flash' || result.selectedModel === 'gemini25Flash' || result.selectedModel === 'gemini3Flash';
-            const isCohereModel = result.selectedModel === 'cohere';
-            const isActuallyStreaming = apiConfig.isStreaming && (contentType && contentType.includes('text/event-stream') || isGeminiModel || isCohereModel);
-
-            if (!aiResponse && isActuallyStreaming) {
-                console.log('스트리밍 응답 처리 시작, Content-Type:', contentType);
+            if (willStream) {
+                // 실시간 스트리밍: fetchViaBackground가 청크마다 updateAIMessage 호출
                 try {
-                    aiResponse = await handleStreamingResponse(response, result.selectedModel, updateAIMessage);
-                    console.log('스트리밍 응답 완료, 길이:', aiResponse?.length || 0);
-                    if (!aiResponse || aiResponse.trim() === '') {
-                        console.warn('스트리밍 응답이 비어있습니다.');
-                        throw new Error('스트리밍 응답이 비어있습니다.');
-                    }
+                    aiResponse = await fetchViaBackground(
+                        apiConfig.url,
+                        { method: 'POST', headers: apiConfig.headers, body: apiConfig.body },
+                        updateAIMessage,
+                        result.selectedModel
+                    );
+                    // 스트리밍 완료 — 화면에 이미 표시됐으므로 바로 마무리
+                    finalizeStreamingOverlay(aiResponse || lastMarkdownResult, result.selectedModel);
+                    return;
                 } catch (streamError) {
                     console.error('스트리밍 처리 중 에러:', streamError);
+                    // 일부라도 화면에 표시됐으면 그냥 마무리
+                    if (lastMarkdownResult && lastMarkdownResult.trim() !== '') {
+                        finalizeStreamingOverlay(lastMarkdownResult, result.selectedModel);
+                        return;
+                    }
                     throw streamError;
                 }
-            } else if (!aiResponse) {
-                console.log('비스트리밍 응답 처리 시작, Content-Type:', contentType);
-                try {
-                    const data = await response.json();
-                    if (data.error) {
-                        console.error('API 응답에 에러 포함:', data.error);
-                        throw new Error(`API 에러: ${data.error.message || JSON.stringify(data.error)}`);
+            } else {
+                // 비스트리밍 (Cerebras 등)
+                const proxyRes = await fetchViaBackground(apiConfig.url, {
+                    method: 'POST',
+                    headers: apiConfig.headers,
+                    body: apiConfig.body
+                });
+
+                if (!proxyRes.ok || proxyRes === '') {
+                    const errorText = typeof proxyRes === 'object' ? (proxyRes.text || '') : String(proxyRes);
+                    // Cerebras 모델 미존재(404) 폴백
+                    if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(proxyRes.status, errorText)) {
+                        const fallbackModel = 'llama3.1-8b';
+                        const contextMessage = `현재 웹페이지의 내용: ${text}`;
+                        const contentForUser = `${contextMessage}\n\n${combinedInstruction}`;
+                        const fallbackBody = buildCerebrasRequestBody({
+                            model: fallbackModel,
+                            instructions: apiConfig.instructions,
+                            content: contentForUser
+                        });
+                        const retryProxyRes = await fetchViaBackground(apiConfig.url, {
+                            method: 'POST',
+                            headers: apiConfig.headers,
+                            body: fallbackBody
+                        });
+                        try {
+                            const retryData = JSON.parse(retryProxyRes);
+                            aiResponse = extractResponseContent(retryData, result.selectedModel);
+                        } catch(e) { throw new Error('폴백 응답 파싱 실패'); }
+                    } else {
+                        throw new Error(`API 요청 실패: ${errorText}`);
                     }
-                    aiResponse = extractResponseContent(data, result.selectedModel);
-                } catch (jsonError) {
-                    console.error('비스트리밍 응답 처리 중 에러:', jsonError);
-                    throw new Error(`응답 파싱 실패: ${jsonError.message}`);
+                } else {
+                    try {
+                        const data = JSON.parse(proxyRes);
+                        if (data.error) throw new Error(`API 에러: ${data.error.message || JSON.stringify(data.error)}`);
+                        aiResponse = extractResponseContent(data, result.selectedModel);
+                    } catch (jsonError) {
+                        throw new Error(`응답 파싱 실패: ${jsonError.message}`);
+                    }
                 }
             }
 
+            // 비스트리밍 결과 표시
             if (!aiResponse || aiResponse.trim() === '') {
                 throw new Error('응답이 비어있습니다.');
             }
-
             showResult(aiResponse);
             addModelNameToLastMessage(result.selectedModel);
         }
@@ -411,36 +513,35 @@ async function sendToAI(text, instruction) {
 
 async function processSingleChunk(chunk, instruction, result) {
     const apiConfig = await getAPIConfig(result, instruction, chunk);
-    const response = await fetch(apiConfig.url, {
+    const proxyRes = await fetchViaBackground(apiConfig.url, {
         method: 'POST',
         headers: apiConfig.headers,
         body: apiConfig.body
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(response.status, errorText)) {
+    if (!proxyRes.ok) {
+        const errorText = proxyRes.text || '';
+        if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(proxyRes.status, errorText)) {
             const fallbackBody = buildCerebrasRequestBody({
                 model: 'llama3.1-8b',
                 instructions: apiConfig.instructions,
                 content: chunk
             });
-            const retryResponse = await fetch(apiConfig.url, {
+            const retryProxyRes = await fetchViaBackground(apiConfig.url, {
                 method: 'POST',
                 headers: apiConfig.headers,
                 body: fallbackBody
             });
-            if (!retryResponse.ok) {
-                const retryErrorText = await retryResponse.text();
-                throw new Error(`청크 처리 중 오류 발생 (${retryResponse.status}): ${retryErrorText}`);
+            if (!retryProxyRes.ok) {
+                throw new Error(`청크 처리 중 오류 발생 (${retryProxyRes.status}): ${retryProxyRes.text}`);
             }
-            const retryData = await retryResponse.json();
+            const retryData = JSON.parse(retryProxyRes.text);
             return extractResponseContent(retryData, result.selectedModel);
         }
-        throw new Error(`청크 처리 중 오류 발생 (${response.status}): ${errorText}`);
+        throw new Error(`청크 처리 중 오류 발생 (${proxyRes.status}): ${errorText}`);
     }
 
-    const data = await response.json();
+    const data = JSON.parse(proxyRes.text);
     return extractResponseContent(data, result.selectedModel);
 }
 
@@ -985,6 +1086,57 @@ async function getAPIConfig(result, instruction, text) {
                     top_p: 0.95
                 });
                 break;
+            case 'lmstudio': {
+                const lmstudioUrl = result.lmstudioApiUrl || 'http://localhost:1234';
+                const lmstudioModel = result.lmstudioModelName || 'local-model';
+                config.url = `${lmstudioUrl}/v1/chat/completions`;
+                config.headers = {
+                    'Content-Type': 'application/json'
+                };
+                config.body = JSON.stringify({
+                    model: lmstudioModel,
+                    messages: [
+                        {
+                            role: "system",
+                            content: config.instructions
+                        },
+                        {
+                            role: "user",
+                            content: `${contextMessage}\n\n${instruction}`
+                        }
+                    ],
+                    stream: true,
+                    temperature: 0.7
+                });
+                config.isStreaming = true;
+                break;
+            }
+            case 'ollama':
+                const ollamaUrl = result.ollamaApiUrl || 'http://localhost:11434';
+                const ollamaModel = result.ollamaModelName || 'llama3';
+                if (!ollamaModel) {
+                    throw new Error('Ollama 모델 이름이 설정되지 않았습니다.');
+                }
+                config.url = `${ollamaUrl}/v1/chat/completions`;
+                config.headers = {
+                    'Content-Type': 'application/json'
+                };
+                config.body = JSON.stringify({
+                    model: ollamaModel,
+                    messages: [
+                        {
+                            role: "system",
+                            content: config.instructions
+                        },
+                        {
+                            role: "user",
+                            content: `${contextMessage}\n\n${instruction}`
+                        }
+                    ],
+                    stream: true,
+                    temperature: 0.7
+                });
+                break;
             default: // cohere
                 config.url = 'https://api.cohere.com/v1/chat';
                 config.headers = {
@@ -1024,6 +1176,8 @@ function extractStreamContent(parsed, model) {
         }
     } else if (model === 'groq') {
         return parsed.choices?.[0]?.delta?.content || '';
+    } else if (model === 'ollama' || model === 'lmstudio') {
+        return parsed.choices?.[0]?.delta?.content || '';
     } else {
         return parsed.event_type === 'text-generation' ? parsed.text : '';
     }
@@ -1048,6 +1202,8 @@ function extractResponseContent(data, model) {
         return data.choices?.[0]?.message?.content || '';
     } else if (model === 'mistralSmall') {
         return data.choices?.[0]?.message?.content || '';
+    } else if (model === 'ollama' || model === 'lmstudio') {
+        return data.choices?.[0]?.message?.content || '';
     } else {
         if (data.generations && data.generations.length > 0) {
             return data.generations[0].text;
@@ -1055,6 +1211,54 @@ function extractResponseContent(data, model) {
     }
     console.error("Unexpected API response format:", data);
     return "API 응답 형식이 예상과 다릅니다.";
+}
+
+/**
+ * 스트리밍이 완료된 뒤 호출된다.
+ * 로딩 오버레이(#summaryOverlay)가 이미 화면에 있으므로
+ * 닫기/복사 버튼과 모델명만 추가해서 마무리한다.
+ */
+function finalizeStreamingOverlay(finalText, model) {
+    const overlay = document.getElementById('summaryOverlay');
+    if (!overlay) {
+        // 오버레이가 없으면 일반 결과로 표시
+        showResult(finalText);
+        addModelNameToLastMessage(model);
+        return;
+    }
+
+    // 로더 숨기기
+    const loader = overlay.querySelector('.loader');
+    if (loader) loader.style.display = 'none';
+    const progressText = overlay.querySelector('#progressText');
+    if (progressText) progressText.style.display = 'none';
+
+    // 제목 교체
+    const h2 = overlay.querySelector('h2');
+    if (h2) h2.textContent = '결과';
+
+    // 버튼이 아직 없으면 추가
+    if (!overlay.querySelector('#closeOverlay')) {
+        const closeBtn = document.createElement('button');
+        closeBtn.id = 'closeOverlay';
+        closeBtn.textContent = '닫기';
+        closeBtn.addEventListener('click', removeExistingOverlay);
+        overlay.appendChild(closeBtn);
+    }
+    if (!overlay.querySelector('#copyResult')) {
+        const copyBtn = document.createElement('button');
+        copyBtn.id = 'copyResult';
+        copyBtn.textContent = '복사';
+        copyBtn.addEventListener('click', copyResultToClipboard);
+        overlay.appendChild(copyBtn);
+    }
+
+    // 모델명 표시
+    const modelSpan = document.createElement('span');
+    modelSpan.id = 'aiModelName';
+    modelSpan.textContent = `(${model})`;
+    modelSpan.style.cssText = 'margin-left: 10px; font-size: 0.9em; color: #666;';
+    overlay.appendChild(modelSpan);
 }
 
 function showResult(result) {

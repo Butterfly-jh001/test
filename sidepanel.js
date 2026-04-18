@@ -405,6 +405,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } else if (model === 'groq') {
             return parsed.choices?.[0]?.delta?.content || '';
+        } else if (model === 'ollama' || model === 'lmstudio') {
+            return parsed.choices?.[0]?.delta?.content || '';
         } else {
             return parsed.event_type === 'text-generation' ? parsed.text : '';
         }
@@ -469,7 +471,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 'cerebrasApiKey',
                 'cerebrasModel',
                 'selectedModel',
-                'instructions'
+                'instructions',
+                'ollamaApiUrl',
+                'ollamaModelName',
+                'lmstudioApiUrl',
+                'lmstudioModelName'
             ], function (result) {
                 if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey &&
                     !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.gemini3FlashApiKey &&
@@ -744,6 +750,65 @@ document.addEventListener('DOMContentLoaded', function () {
                         };
                         config.isStreaming = false;
                         break;
+                    case 'lmstudio': {
+                        const lmstudioUrl = result.lmstudioApiUrl || 'http://localhost:1234';
+                        const lmstudioModel = result.lmstudioModelName || 'local-model';
+                        config.url = `${lmstudioUrl}/v1/chat/completions`;
+                        config.headers = {
+                            'Content-Type': 'application/json'
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            model: lmstudioModel,
+                            messages: [
+                                {
+                                    role: "system",
+                                    content: config.instructions
+                                },
+                                ...conversationHistory.map(hist => ({
+                                    role: hist.role.toLowerCase() === "user" ? "user" : "assistant",
+                                    content: hist.message
+                                })),
+                                {
+                                    role: "user",
+                                    content: `${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }
+                            ],
+                            stream: true,
+                            temperature: 0.7
+                        });
+                        config.isStreaming = true;
+                        break;
+                    }
+                    case 'ollama':
+                        const ollamaUrl = result.ollamaApiUrl || 'http://localhost:11434';
+                        const ollamaModel = result.ollamaModelName || 'llama3';
+                        if (!ollamaModel) {
+                            throw new Error('Ollama 모델 이름이 설정되지 않았습니다.');
+                        }
+                        config.url = `${ollamaUrl}/v1/chat/completions`;
+                        config.headers = {
+                            'Content-Type': 'application/json'
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            model: ollamaModel,
+                            messages: [
+                                {
+                                    role: "system",
+                                    content: config.instructions
+                                },
+                                ...conversationHistory.map(hist => ({
+                                    role: hist.role.toLowerCase() === "user" ? "user" : "assistant",
+                                    content: hist.message
+                                })),
+                                {
+                                    role: "user",
+                                    content: `${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }
+                            ],
+                            stream: true,
+                            temperature: 0.7
+                        });
+                        break;
                     default: // cohere
                         config.url = 'https://api.cohere.com/v1/chat';
                         config.headers = {
@@ -757,6 +822,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             stream: true,
                             temperature: 0.7
                         });
+                        break;
                 }
 
                 resolve(config);
@@ -767,6 +833,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // 비스트리밍 응답 추출 함수
     function extractNonStreamingResponse(data, model) {
         if (model === 'Cerebras') {
+            if (data.choices && data.choices.length > 0 && data.choices[0].message) {
+                return data.choices[0].message.content;
+            }
+        } else if (model === 'ollama' || model === 'lmstudio') {
             if (data.choices && data.choices.length > 0 && data.choices[0].message) {
                 return data.choices[0].message.content;
             }

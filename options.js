@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', function () {
     var groqApiKeyInput = document.getElementById('groqApiKey');
     var ollamaApiKeyInput = document.getElementById('ollamaApiKey');
     var ollamaModelNameInput = document.getElementById('ollamaModelName');
+    var ollamaApiUrlInput = document.getElementById('ollamaApiUrl');
+    var lmstudioApiUrlInput = document.getElementById('lmstudioApiUrl');
+    var lmstudioModelNameInput = document.getElementById('lmstudioModelName');
     var cerebrasApiKeyInput = document.getElementById('cerebrasApiKey');
     var cerebrasModelRadios = document.querySelectorAll('input[name="cerebrasModel"]');
     var google20FlashApiKeyInput = document.getElementById('google20FlashApiKey');
@@ -154,6 +157,15 @@ document.addEventListener('DOMContentLoaded', function () {
         groqApiKeyInput.value = data.groqApiKey || '';
         ollamaApiKeyInput.value = data.ollamaApiKey || '';
         ollamaModelNameInput.value = data.ollamaModelName || '';
+        if (ollamaApiUrlInput) {
+            ollamaApiUrlInput.value = data.ollamaApiUrl || 'http://localhost:11434';
+        }
+        if (lmstudioApiUrlInput) {
+            lmstudioApiUrlInput.value = data.lmstudioApiUrl || 'http://localhost:1234';
+        }
+        if (lmstudioModelNameInput) {
+            lmstudioModelNameInput.value = data.lmstudioModelName || '';
+        }
         cerebrasApiKeyInput.value = data.cerebrasApiKey || '';
 
         // google20FlashApiKey 설정
@@ -200,6 +212,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const groqSection = document.getElementById('groqApiSection');
         const ollamaSection = document.getElementById('ollamaApiSection');
         const ollamaModelNameSection = document.getElementById('ollamaModelNameSection');
+        const lmstudioSection = document.getElementById('lmstudioApiSection');
         const cerebrasSection = document.getElementById('cerebrasApiSection');
 
         // 모든 섹션 숨기기
@@ -214,6 +227,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (groqSection) groqSection.style.display = 'none';
         if (ollamaSection) ollamaSection.style.display = 'none';
         if (ollamaModelNameSection) ollamaModelNameSection.style.display = 'none';
+        if (lmstudioSection) lmstudioSection.style.display = 'none';
         if (cerebrasSection) cerebrasSection.style.display = 'none';
 
         // 선택된 모델에 따라 해당 섹션 표시
@@ -257,6 +271,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (ollamaSection) ollamaSection.style.display = 'block';
                 if (ollamaModelNameSection) ollamaModelNameSection.style.display = 'block';
                 break;
+            case 'lmstudio':
+                if (lmstudioSection) lmstudioSection.style.display = 'block';
+                break;
             case 'Cerebras':
                 if (cerebrasSection) cerebrasSection.style.display = 'block';
                 break;
@@ -276,6 +293,9 @@ document.addEventListener('DOMContentLoaded', function () {
         'groqApiKey',
         'ollamaApiKey',
         'ollamaModelName',
+        'ollamaApiUrl',
+        'lmstudioApiUrl',
+        'lmstudioModelName',
         'selectedModel',
         'cerebrasApiKey',
         'cerebrasModel'
@@ -292,6 +312,9 @@ document.addEventListener('DOMContentLoaded', function () {
         var groqApiKey = groqApiKeyInput.value.trim();
         var ollamaApiKey = ollamaApiKeyInput.value.trim();
         var ollamaModelName = ollamaModelNameInput.value.trim();
+        var ollamaApiUrl = ollamaApiUrlInput ? ollamaApiUrlInput.value.trim() : 'http://localhost:11434';
+        var lmstudioApiUrl = lmstudioApiUrlInput ? lmstudioApiUrlInput.value.trim() : 'http://localhost:1234';
+        var lmstudioModelName = lmstudioModelNameInput ? lmstudioModelNameInput.value.trim() : '';
         var cerebrasApiKey = cerebrasApiKeyInput.value.trim();
         var google20FlashApiKey = google20FlashApiKeyInput ? google20FlashApiKeyInput.value.trim() : '';
         var gemini25FlashApiKey = gemini25FlashApiKeyInput ? gemini25FlashApiKeyInput.value.trim() : '';
@@ -318,6 +341,9 @@ document.addEventListener('DOMContentLoaded', function () {
             groqApiKey: groqApiKey,
             ollamaApiKey: ollamaApiKey,
             ollamaModelName: ollamaModelName,
+            ollamaApiUrl: ollamaApiUrl,
+            lmstudioApiUrl: lmstudioApiUrl,
+            lmstudioModelName: lmstudioModelName,
             selectedModel: selectedModel,
             cerebrasApiKey: cerebrasApiKey,
             cerebrasModel: cerebrasModel

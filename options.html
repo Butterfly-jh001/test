@@ -73,6 +73,7 @@
             <option value="gemini31FlashLite">Google 3.1 Flash Lite</option>
             <option value="groq">Groq Llama 3.1 70B</option>
             <option value="ollama">Ollama API</option>
+            <option value="lmstudio">LM Studio</option>
             <option value="Cerebras">Cerebras</option>
         </select>
         <div id="cohereApiSection">
@@ -128,12 +129,22 @@
                 <label for="zai-glm-4.7"><input type="radio" id="zai-glm-4.7" name="cerebrasModel" value="zai-glm-4.7">zai-glm-4.7</label>
             </div>
         </div>
+        <div id="lmstudioApiSection">
+            <label for="lmstudioApiUrl">LM Studio API URL:</label>
+            <input type="text" id="lmstudioApiUrl" placeholder="http://localhost:1234">
+            <div id="lmstudioModelNameSection">
+                <label for="lmstudioModelName">LM Studio 모델 이름:</label>
+                <input type="text" id="lmstudioModelName" placeholder="모델 이름을 입력하세요 (예: llama-3-8b-instruct)">
+            </div>
+        </div>
         <div id="ollamaApiSection">
+            <label for="ollamaApiUrl">Ollama API URL:</label>
+            <input type="text" id="ollamaApiUrl" placeholder="http://localhost:11434">
             <label for="ollamaApiKey">Ollama API 키:</label>
             <input type="text" id="ollamaApiKey" style="display:none;" placeholder="Ollama API 키를 입력하세요">
             <div id="ollamaModelNameSection" style="display: none;">
                 <label for="ollamaModelName">Ollama 모델 이름:</label>
-                <input type="text" id="ollamaModelName" placeholder="Ollama 모델 이름을 입력하세요">
+                <input type="text" id="ollamaModelName" placeholder="Ollama 모델 이름을 입력하세요 (예: llama3, mistral)">
             </div>
         </div>
         <button id="save">저장</button> <p id="status"></p>

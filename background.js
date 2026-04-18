@@ -154,3 +154,77 @@ function sendMessage(tabId, info) {
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id });
 });
+
+// ── content.js 대신 fetch를 처리하는 중계 핸들러 ──────────────────────
+// content script는 일부 사이트(네이버 등)에서 CORS로 직접 fetch가 막히므로
+// background service worker가 대신 요청하고, 청크 단위로 실시간 전달한다.
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action !== 'fetchProxy') return false;
+
+  const { url, method, headers, body, streamId } = request;
+  const tabId = sender.tab?.id;
+
+  fetch(url, { method: method || 'POST', headers, body })
+    .then(async (res) => {
+      const contentType = res.headers.get('content-type') || '';
+      const ok = res.ok;
+      const status = res.status;
+
+      // 응답 실패: 에러 텍스트를 한 번에 반환
+      if (!ok) {
+        const text = await res.text();
+        sendResponse({ ok, status, contentType, done: true, chunk: '', text, error: null });
+        return;
+      }
+
+      // 스트리밍 시작 알림 (ok, status, contentType 전달)
+      sendResponse({ ok, status, contentType, done: false, chunk: '', text: '' });
+
+      // ReadableStream을 청크 단위로 읽어 탭에 메시지 전송
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      const pushChunk = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            if (tabId != null) {
+              chrome.tabs.sendMessage(tabId, {
+                action: 'fetchProxyChunk',
+                streamId,
+                done: true,
+                chunk: ''
+              });
+            }
+            break;
+          }
+          const chunk = decoder.decode(value, { stream: true });
+          if (tabId != null) {
+            chrome.tabs.sendMessage(tabId, {
+              action: 'fetchProxyChunk',
+              streamId,
+              done: false,
+              chunk
+            });
+          }
+        }
+      };
+
+      pushChunk().catch((err) => {
+        if (tabId != null) {
+          chrome.tabs.sendMessage(tabId, {
+            action: 'fetchProxyChunk',
+            streamId,
+            done: true,
+            chunk: '',
+            error: err.message
+          });
+        }
+      });
+    })
+    .catch((err) => {
+      sendResponse({ ok: false, status: 0, contentType: '', done: true, chunk: '', text: '', error: err.message });
+    });
+
+  return true; // 비동기 sendResponse 유지
+});
