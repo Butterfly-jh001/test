@@ -13,12 +13,13 @@ Gemini (pro) / Flash / 2.0 Flash 추가 (2025-06-05)
 
 cerebras
 
+LM Studio
+
+Ollama
+
 등을 사용 할 수 있습니다.
 
 모두 무료 API사용이 가능합니다.
-
-ollama는 표시되지만
-아직 오류가 해결되지 않아 작동하지 않습니다.
 
 "I've developed a Chrome extension for webpage summarization 
 with the help of various AI models, 
