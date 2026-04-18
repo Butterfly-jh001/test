@@ -120,10 +120,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function normalizeCerebrasModel(model) {
         const fallback = 'llama3.1-8b';
         if (!model || typeof model !== 'string') return fallback;
+        const allowed = ['llama3.1-8b', 'gpt-oss-120b', 'qwen-3-235b-a22b-instruct-2507'];
         const trimmed = model.trim();
-        if (trimmed === 'llama-3.3-70b') return fallback;
-        if (trimmed === 'gpt-oss-120b') return fallback;
-        return trimmed;
+        return allowed.includes(trimmed) ? trimmed : fallback;
     }
 
     function isCerebrasModelNotFound(status, errorText) {

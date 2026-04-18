@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', function () {
+    const CEREBRAS_ALLOWED_MODELS = ['llama3.1-8b', 'gpt-oss-120b', 'qwen-3-235b-a22b-instruct-2507'];
+    const CEREBRAS_FALLBACK_MODEL = 'llama3.1-8b';
+
+    function normalizeCerebrasModel(model) {
+        if (typeof model !== 'string') return CEREBRAS_FALLBACK_MODEL;
+        const trimmed = model.trim();
+        return CEREBRAS_ALLOWED_MODELS.includes(trimmed) ? trimmed : CEREBRAS_FALLBACK_MODEL;
+    }
+
     var cohereApiKeyInput = document.getElementById('cohereApiKey');
     var mistralApiKeyInput = document.getElementById('mistralApiKey');
     var geminiApiKeyInput = document.getElementById('geminiApiKey');
@@ -192,8 +201,9 @@ document.addEventListener('DOMContentLoaded', function () {
         aiModelSelect.value = data.selectedModel || 'cohere';
 
         // Cerebras 모델 라디오 버튼 설정
+        const normalizedCerebrasModel = normalizeCerebrasModel(data.cerebrasModel);
         cerebrasModelRadios.forEach(function (radio) {
-            radio.checked = data.cerebrasModel === radio.value;
+            radio.checked = normalizedCerebrasModel === radio.value;
         });
 
         // UI 표시/숨김 업데이트
@@ -329,6 +339,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
+        const normalizedCerebrasModel = normalizeCerebrasModel(cerebrasModel);
+
         var dataToSave = {
             cohereApiKey: cohereApiKey,
             mistralApiKey: mistralApiKey,
@@ -346,7 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
             lmstudioModelName: lmstudioModelName,
             selectedModel: selectedModel,
             cerebrasApiKey: cerebrasApiKey,
-            cerebrasModel: cerebrasModel
+            cerebrasModel: normalizedCerebrasModel
         };
 
         chrome.storage.sync.set(dataToSave, function () {

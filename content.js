@@ -240,14 +240,10 @@ let lastMarkdownResult = "";
 
 function normalizeCerebrasModel(model) {
     const fallback = 'llama3.1-8b';
+    const allowed = ['llama3.1-8b', 'gpt-oss-120b', 'qwen-3-235b-a22b-instruct-2507'];
     if (!model || typeof model !== 'string') return fallback;
-
     const trimmed = model.trim();
-    // Legacy / invalid IDs observed in the wild
-    if (trimmed === 'llama-3.3-70b') return fallback;
-    if (trimmed === 'gpt-oss-120b') return fallback;
-
-    return trimmed;
+    return allowed.includes(trimmed) ? trimmed : fallback;
 }
 
 function isCerebrasModelNotFound(status, errorText) {
@@ -284,6 +280,9 @@ async function sendToAI(text, instruction) {
             'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey',
             'ollamaApiUrl', 'ollamaModelName', 'lmstudioApiUrl', 'lmstudioModelName'
         ]);
+        // #region agent log
+        fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H3',location:'content.js:sendToAI:storage',message:'Loaded model selection from storage',data:{selectedModel:result.selectedModel,cerebrasModel:result.cerebrasModel,hasCerebrasKey:Boolean(result.cerebrasApiKey)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
 
         const instructions = result.instructions || [];
         const combinedInstruction = instructions.join('\n') + '\n' + instruction;
@@ -457,16 +456,24 @@ async function sendToAI(text, instruction) {
                 }
             } else {
                 // 비스트리밍 (Cerebras 등)
-                const proxyRes = await fetchViaBackground(apiConfig.url, {
-                    method: 'POST',
-                    headers: apiConfig.headers,
-                    body: apiConfig.body
-                });
+                let proxyText = '';
+                try {
+                    proxyText = await fetchViaBackground(apiConfig.url, {
+                        method: 'POST',
+                        headers: apiConfig.headers,
+                        body: apiConfig.body
+                    });
+                    // #region agent log
+                    fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H2',location:'content.js:sendToAI:nonstream-response',message:'Received non-streaming proxy response',data:{selectedModel:result.selectedModel,responseType:typeof proxyText,responsePreview:String(proxyText).slice(0,220)},timestamp:Date.now()})}).catch(()=>{});
+                    // #endregion
+                } catch (requestError) {
+                    const message = requestError?.message || String(requestError);
+                    const statusMatch = message.match(/API 요청 실패 \((\d+)\):\s*([\s\S]*)$/);
+                    const status = statusMatch ? Number(statusMatch[1]) : 0;
+                    const errorText = statusMatch ? statusMatch[2] : message;
 
-                if (!proxyRes.ok || proxyRes === '') {
-                    const errorText = typeof proxyRes === 'object' ? (proxyRes.text || '') : String(proxyRes);
                     // Cerebras 모델 미존재(404) 폴백
-                    if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(proxyRes.status, errorText)) {
+                    if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(status, errorText)) {
                         const fallbackModel = 'llama3.1-8b';
                         const contextMessage = `현재 웹페이지의 내용: ${text}`;
                         const contentForUser = `${contextMessage}\n\n${combinedInstruction}`;
@@ -475,26 +482,25 @@ async function sendToAI(text, instruction) {
                             instructions: apiConfig.instructions,
                             content: contentForUser
                         });
-                        const retryProxyRes = await fetchViaBackground(apiConfig.url, {
+                        proxyText = await fetchViaBackground(apiConfig.url, {
                             method: 'POST',
                             headers: apiConfig.headers,
                             body: fallbackBody
                         });
-                        try {
-                            const retryData = JSON.parse(retryProxyRes);
-                            aiResponse = extractResponseContent(retryData, result.selectedModel);
-                        } catch(e) { throw new Error('폴백 응답 파싱 실패'); }
                     } else {
-                        throw new Error(`API 요청 실패: ${errorText}`);
+                        throw requestError;
                     }
-                } else {
-                    try {
-                        const data = JSON.parse(proxyRes);
-                        if (data.error) throw new Error(`API 에러: ${data.error.message || JSON.stringify(data.error)}`);
-                        aiResponse = extractResponseContent(data, result.selectedModel);
-                    } catch (jsonError) {
-                        throw new Error(`응답 파싱 실패: ${jsonError.message}`);
-                    }
+                }
+
+                if (!proxyText || proxyText === '') {
+                    throw new Error('응답이 비어있습니다.');
+                }
+                try {
+                    const data = JSON.parse(proxyText);
+                    if (data.error) throw new Error(`API 에러: ${data.error.message || JSON.stringify(data.error)}`);
+                    aiResponse = extractResponseContent(data, result.selectedModel);
+                } catch (jsonError) {
+                    throw new Error(`응답 파싱 실패: ${jsonError.message}`);
                 }
             }
 
@@ -506,6 +512,9 @@ async function sendToAI(text, instruction) {
             addModelNameToLastMessage(result.selectedModel);
         }
     } catch (error) {
+        // #region agent log
+        fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H4',location:'content.js:sendToAI:catch',message:'sendToAI failed',data:{errorType:typeof error,errorMessage:error?.message||null,errorString:String(error)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         console.error('Error in sendToAI:', error);
         showResult(`오류가 발생했습니다: ${error.message}`);
     }
@@ -513,35 +522,35 @@ async function sendToAI(text, instruction) {
 
 async function processSingleChunk(chunk, instruction, result) {
     const apiConfig = await getAPIConfig(result, instruction, chunk);
-    const proxyRes = await fetchViaBackground(apiConfig.url, {
-        method: 'POST',
-        headers: apiConfig.headers,
-        body: apiConfig.body
-    });
-
-    if (!proxyRes.ok) {
-        const errorText = proxyRes.text || '';
-        if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(proxyRes.status, errorText)) {
+    let proxyText = '';
+    try {
+        proxyText = await fetchViaBackground(apiConfig.url, {
+            method: 'POST',
+            headers: apiConfig.headers,
+            body: apiConfig.body
+        });
+    } catch (requestError) {
+        const message = requestError?.message || String(requestError);
+        const statusMatch = message.match(/API 요청 실패 \((\d+)\):\s*([\s\S]*)$/);
+        const status = statusMatch ? Number(statusMatch[1]) : 0;
+        const errorText = statusMatch ? statusMatch[2] : message;
+        if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(status, errorText)) {
             const fallbackBody = buildCerebrasRequestBody({
                 model: 'llama3.1-8b',
                 instructions: apiConfig.instructions,
                 content: chunk
             });
-            const retryProxyRes = await fetchViaBackground(apiConfig.url, {
+            proxyText = await fetchViaBackground(apiConfig.url, {
                 method: 'POST',
                 headers: apiConfig.headers,
                 body: fallbackBody
             });
-            if (!retryProxyRes.ok) {
-                throw new Error(`청크 처리 중 오류 발생 (${retryProxyRes.status}): ${retryProxyRes.text}`);
-            }
-            const retryData = JSON.parse(retryProxyRes.text);
-            return extractResponseContent(retryData, result.selectedModel);
+        } else {
+            throw new Error(`청크 처리 중 오류 발생 (${status || 'unknown'}): ${errorText}`);
         }
-        throw new Error(`청크 처리 중 오류 발생 (${proxyRes.status}): ${errorText}`);
     }
 
-    const data = JSON.parse(proxyRes.text);
+    const data = JSON.parse(proxyText);
     return extractResponseContent(data, result.selectedModel);
 }
 
@@ -795,6 +804,9 @@ async function getAPIConfig(result, instruction, text) {
             };
 
             const selectedModel = normalizeCerebrasModel(result.cerebrasModel);
+            // #region agent log
+            fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H1',location:'content.js:getAPIConfig:cerebras-initial',message:'Normalized Cerebras model for request',data:{rawCerebrasModel:result.cerebrasModel,normalizedCerebrasModel:selectedModel},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
 
             config.body = JSON.stringify({
                 model: selectedModel,
@@ -1067,6 +1079,9 @@ async function getAPIConfig(result, instruction, text) {
                 };
 
                 const selectedModel = normalizeCerebrasModel(result.cerebrasModel);
+                // #region agent log
+                fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H1',location:'content.js:getAPIConfig:cerebras-switch',message:'Built Cerebras request body from normalized model',data:{rawCerebrasModel:result.cerebrasModel,normalizedCerebrasModel:selectedModel},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
 
                 config.body = JSON.stringify({
                     model: selectedModel,
