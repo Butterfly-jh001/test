@@ -164,67 +164,88 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const { url, method, headers, body, streamId } = request;
   const tabId = sender.tab?.id;
 
-  fetch(url, { method: method || 'POST', headers, body })
-    .then(async (res) => {
-      const contentType = res.headers.get('content-type') || '';
-      const ok = res.ok;
-      const status = res.status;
+  // 503/429 자동 재시도 (최대 3회, 지수 백오프)
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = [1000, 2000, 4000];
 
-      // 응답 실패: 에러 텍스트를 한 번에 반환
-      if (!ok) {
-        const text = await res.text();
-        sendResponse({ ok, status, contentType, done: true, chunk: '', text, error: null });
-        return;
+  const doFetch = async (attempt) => {
+    const res = await fetch(url, { method: method || 'POST', headers, body });
+    const contentType = res.headers.get('content-type') || '';
+
+    // 503(서버 과부하) 또는 429(요청 초과) → 재시도
+    if ((res.status === 503 || res.status === 429) && attempt < MAX_RETRIES) {
+      const delay = RETRY_DELAY_MS[attempt] || 4000;
+      console.log(`[fetchProxy] ${res.status} 오류, ${delay}ms 후 재시도 (${attempt + 1}/${MAX_RETRIES})`);
+      // 재시도 중임을 탭에 알림
+      if (tabId != null) {
+        chrome.tabs.sendMessage(tabId, {
+          action: 'fetchProxyChunk',
+          streamId,
+          done: false,
+          chunk: '',
+          retrying: true,
+          retryAttempt: attempt + 1,
+          retryDelay: delay
+        });
       }
+      await new Promise(r => setTimeout(r, delay));
+      return doFetch(attempt + 1);
+    }
 
-      // 스트리밍 시작 알림 (ok, status, contentType 전달)
-      sendResponse({ ok, status, contentType, done: false, chunk: '', text: '' });
+    if (!res.ok) {
+      const text = await res.text();
+      sendResponse({ ok: false, status: res.status, contentType, done: true, chunk: '', text, error: null });
+      return;
+    }
 
-      // ReadableStream을 청크 단위로 읽어 탭에 메시지 전송
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
+    // 스트리밍 시작 알림
+    sendResponse({ ok: true, status: res.status, contentType, done: false, chunk: '', text: '' });
 
-      const pushChunk = async () => {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            if (tabId != null) {
-              chrome.tabs.sendMessage(tabId, {
-                action: 'fetchProxyChunk',
-                streamId,
-                done: true,
-                chunk: ''
-              });
-            }
-            break;
-          }
-          const chunk = decoder.decode(value, { stream: true });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+
+    const pushChunk = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
           if (tabId != null) {
             chrome.tabs.sendMessage(tabId, {
               action: 'fetchProxyChunk',
               streamId,
-              done: false,
-              chunk
+              done: true,
+              chunk: ''
             });
           }
+          break;
         }
-      };
-
-      pushChunk().catch((err) => {
+        const chunk = decoder.decode(value, { stream: true });
         if (tabId != null) {
           chrome.tabs.sendMessage(tabId, {
             action: 'fetchProxyChunk',
             streamId,
-            done: true,
-            chunk: '',
-            error: err.message
+            done: false,
+            chunk
           });
         }
-      });
-    })
-    .catch((err) => {
-      sendResponse({ ok: false, status: 0, contentType: '', done: true, chunk: '', text: '', error: err.message });
+      }
+    };
+
+    pushChunk().catch((err) => {
+      if (tabId != null) {
+        chrome.tabs.sendMessage(tabId, {
+          action: 'fetchProxyChunk',
+          streamId,
+          done: true,
+          chunk: '',
+          error: err.message
+        });
+      }
     });
+  };
+
+  doFetch(0).catch((err) => {
+    sendResponse({ ok: false, status: 0, contentType: '', done: true, chunk: '', text: '', error: err.message });
+  });
 
   return true; // 비동기 sendResponse 유지
 });

@@ -6,6 +6,28 @@ function getPageContent() {
 }
 
 /**
+ * API 오류 코드를 사용자 친화적 메시지로 변환
+ */
+function friendlyApiError(status, rawText) {
+    switch (status) {
+        case 429:
+            return '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요. (429 Rate Limit)';
+        case 503:
+            return 'AI 서버가 현재 혼잡합니다. 잠시 후 다시 시도해 주세요. (503 Service Unavailable)';
+        case 500:
+            return 'AI 서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. (500)';
+        case 401:
+            return 'API 키가 올바르지 않습니다. 설정에서 API 키를 확인해 주세요. (401 Unauthorized)';
+        case 403:
+            return 'API 접근 권한이 없습니다. API 키 또는 플랜을 확인해 주세요. (403 Forbidden)';
+        case 404:
+            return '모델을 찾을 수 없습니다. 설정에서 모델 이름을 확인해 주세요. (404 Not Found)';
+        default:
+            return `API 요청 실패 (${status}): ${rawText.slice(0, 200)}`;
+    }
+}
+
+/**
  * CORS 우회 + LNA 팝업 방지:
  * content script(웹페이지 오리진)에서 직접 fetch하면
  *   - 외부 API: CORS 오류
@@ -31,6 +53,13 @@ function fetchViaBackground(url, options = {}, updateCallback = null, model = ''
             }
 
             if (!message.done) {
+                // 재시도 알림 처리
+                if (message.retrying) {
+                    const retryMsg = `⏳ 서버가 혼잡합니다. ${message.retryDelay / 1000}초 후 재시도 중... (${message.retryAttempt}/3)`;
+                    if (updateCallback) updateCallback(retryMsg);
+                    return;
+                }
+
                 buffer += message.chunk;
 
                 if (updateCallback && model) {
@@ -110,10 +139,10 @@ function fetchViaBackground(url, options = {}, updateCallback = null, model = ''
                     chrome.runtime.onMessage.removeListener(chunkListener);
                     return reject(new Error(response.error));
                 }
-                // 응답 실패 (4xx/5xx)
+                // 응답 실패 (4xx/5xx) — 사용자 친화적 메시지로 변환
                 if (!response.ok) {
                     chrome.runtime.onMessage.removeListener(chunkListener);
-                    return reject(new Error(`API 요청 실패 (${response.status}): ${response.text || ''}`));
+                    return reject(new Error(friendlyApiError(response.status, response.text || '')));
                 }
                 // ok=true, done=false → 청크 수신 대기 중 (chunkListener가 처리)
             }
@@ -376,43 +405,41 @@ async function sendToAI(text, instruction) {
                     throw streamError;
                 }
             } else {
-                // 비스트리밍 (Cerebras 등)
-                const proxyRes = await fetchViaBackground(apiConfig.url, {
-                    method: 'POST',
-                    headers: apiConfig.headers,
-                    body: apiConfig.body
-                });
-
-                if (!proxyRes.ok || proxyRes === '') {
-                    const errorText = typeof proxyRes === 'object' ? (proxyRes.text || '') : String(proxyRes);
-                    // Cerebras 모델 미존재(404) 폴백
-                    if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(proxyRes.status, errorText)) {
-                        const fallbackModel = 'llama3.1-8b';
-                        const contextMessage = `현재 웹페이지의 내용: ${text}`;
-                        const contentForUser = `${contextMessage}\n\n${combinedInstruction}`;
+                // 비스트리밍 (Cerebras 등) — fetchViaBackground는 string을 반환
+                let rawText;
+                try {
+                    rawText = await fetchViaBackground(apiConfig.url, {
+                        method: 'POST',
+                        headers: apiConfig.headers,
+                        body: apiConfig.body
+                    });
+                } catch (fetchError) {
+                    // 404 → Cerebras 모델 폴백
+                    if (result.selectedModel === 'Cerebras' && fetchError.message.includes('404')) {
                         const fallbackBody = buildCerebrasRequestBody({
-                            model: fallbackModel,
+                            model: 'llama3.1-8b',
                             instructions: apiConfig.instructions,
-                            content: contentForUser
+                            content: `현재 웹페이지의 내용: ${text}\n\n${combinedInstruction}`
                         });
-                        const retryProxyRes = await fetchViaBackground(apiConfig.url, {
+                        rawText = await fetchViaBackground(apiConfig.url, {
                             method: 'POST',
                             headers: apiConfig.headers,
                             body: fallbackBody
                         });
-                        try {
-                            const retryData = JSON.parse(retryProxyRes);
-                            aiResponse = extractResponseContent(retryData, result.selectedModel);
-                        } catch(e) { throw new Error('폴백 응답 파싱 실패'); }
                     } else {
-                        throw new Error(`API 요청 실패: ${errorText}`);
+                        throw fetchError;
                     }
-                } else {
-                    try {
-                        const data = JSON.parse(proxyRes);
-                        if (data.error) throw new Error(`API 에러: ${data.error.message || JSON.stringify(data.error)}`);
-                        aiResponse = extractResponseContent(data, result.selectedModel);
-                    } catch (jsonError) {
+                }
+
+                try {
+                    const data = JSON.parse(rawText);
+                    if (data.error) throw new Error(`API 에러: ${data.error.message || JSON.stringify(data.error)}`);
+                    aiResponse = extractResponseContent(data, result.selectedModel);
+                } catch (jsonError) {
+                    // JSON 파싱 실패 시 rawText 자체가 응답일 수 있음
+                    if (rawText && rawText.trim()) {
+                        aiResponse = rawText;
+                    } else {
                         throw new Error(`응답 파싱 실패: ${jsonError.message}`);
                     }
                 }
@@ -433,35 +460,30 @@ async function sendToAI(text, instruction) {
 
 async function processSingleChunk(chunk, instruction, result) {
     const apiConfig = await getAPIConfig(result, instruction, chunk);
-    const proxyRes = await fetchViaBackground(apiConfig.url, {
-        method: 'POST',
-        headers: apiConfig.headers,
-        body: apiConfig.body
-    });
-
-    if (!proxyRes.ok) {
-        const errorText = proxyRes.text || '';
-        if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(proxyRes.status, errorText)) {
+    let rawText;
+    try {
+        rawText = await fetchViaBackground(apiConfig.url, {
+            method: 'POST',
+            headers: apiConfig.headers,
+            body: apiConfig.body
+        });
+    } catch (fetchError) {
+        if (result.selectedModel === 'Cerebras' && fetchError.message.includes('404')) {
             const fallbackBody = buildCerebrasRequestBody({
                 model: 'llama3.1-8b',
                 instructions: apiConfig.instructions,
                 content: chunk
             });
-            const retryProxyRes = await fetchViaBackground(apiConfig.url, {
+            rawText = await fetchViaBackground(apiConfig.url, {
                 method: 'POST',
                 headers: apiConfig.headers,
                 body: fallbackBody
             });
-            if (!retryProxyRes.ok) {
-                throw new Error(`청크 처리 중 오류 발생 (${retryProxyRes.status}): ${retryProxyRes.text}`);
-            }
-            const retryData = JSON.parse(retryProxyRes.text);
-            return extractResponseContent(retryData, result.selectedModel);
+        } else {
+            throw fetchError;
         }
-        throw new Error(`청크 처리 중 오류 발생 (${proxyRes.status}): ${errorText}`);
     }
-
-    const data = JSON.parse(proxyRes.text);
+    const data = JSON.parse(rawText);
     return extractResponseContent(data, result.selectedModel);
 }
 
@@ -1157,28 +1179,32 @@ function finalizeStreamingOverlay(finalText, model) {
     const h2 = overlay.querySelector('h2');
     if (h2) h2.textContent = '결과';
 
-    // 버튼이 아직 없으면 추가
-    if (!overlay.querySelector('#closeOverlay')) {
+    // 버튼 컨테이너가 아직 없으면 생성
+    if (!overlay.querySelector('#overlayBtnRow')) {
+        const btnRow = document.createElement('div');
+        btnRow.id = 'overlayBtnRow';
+        btnRow.style.cssText = 'display:flex; justify-content:center; align-items:center; gap:10px; margin-top:16px;';
+
         const closeBtn = document.createElement('button');
         closeBtn.id = 'closeOverlay';
         closeBtn.textContent = '닫기';
         closeBtn.addEventListener('click', removeExistingOverlay);
-        overlay.appendChild(closeBtn);
-    }
-    if (!overlay.querySelector('#copyResult')) {
+
         const copyBtn = document.createElement('button');
         copyBtn.id = 'copyResult';
         copyBtn.textContent = '복사';
         copyBtn.addEventListener('click', copyResultToClipboard);
-        overlay.appendChild(copyBtn);
-    }
 
-    // 모델명 표시
-    const modelSpan = document.createElement('span');
-    modelSpan.id = 'aiModelName';
-    modelSpan.textContent = `(${model})`;
-    modelSpan.style.cssText = 'margin-left: 10px; font-size: 0.9em; color: #666;';
-    overlay.appendChild(modelSpan);
+        const modelSpan = document.createElement('span');
+        modelSpan.id = 'aiModelName';
+        modelSpan.textContent = `(${model})`;
+        modelSpan.style.cssText = 'font-size: 0.9em; color: #666;';
+
+        btnRow.appendChild(closeBtn);
+        btnRow.appendChild(copyBtn);
+        btnRow.appendChild(modelSpan);
+        overlay.appendChild(btnRow);
+    }
 }
 
 function showResult(result) {
@@ -1188,9 +1214,11 @@ function showResult(result) {
     content.innerHTML = `
     <h2 style="margin-top: 0; margin-bottom: 20px; color: #2c3e50;">결과</h2>
     <div id="resultText" class="markdown-body" style="margin-bottom: 20px; line-height: 1.6; color: #444;"></div>
-    <button id="closeOverlay">닫기</button>
-    <button id="copyResult">복사</button>
-    <span id="aiModelName"></span>
+    <div id="overlayBtnRow" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:16px;">
+      <button id="closeOverlay">닫기</button>
+      <button id="copyResult">복사</button>
+      <span id="aiModelName"></span>
+    </div>
   `;
     overlay.appendChild(content);
     document.body.appendChild(overlay);
@@ -1268,9 +1296,12 @@ function addStyles() {
       margin-top: 20px;
       word-break: break-word;
     }
-    #summaryOverlay div {
+    #summaryOverlay div:not(#overlayBtnRow) {
       line-height: 1.6;
       margin-bottom: 15px;
+    }
+    #overlayBtnRow {
+      margin-bottom: 0;
     }
     #summaryOverlay h2 {
       font-size: 1.4em;
