@@ -163,18 +163,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   const { url, method, headers, body, streamId } = request;
   const tabId = sender.tab?.id;
-  // #region agent log
-  fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H5',location:'background.js:onMessage:fetchProxy:entry',message:'fetchProxy request received in background',data:{url,method:method||'POST',hasBody:Boolean(body),streamId},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   fetch(url, { method: method || 'POST', headers, body })
     .then(async (res) => {
       const contentType = res.headers.get('content-type') || '';
       const ok = res.ok;
       const status = res.status;
-      // #region agent log
-      fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H5',location:'background.js:onMessage:fetchProxy:response',message:'fetchProxy received upstream response',data:{ok,status,contentType},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       // 응답 실패: 에러 텍스트를 한 번에 반환
       if (!ok) {
@@ -229,9 +223,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     })
     .catch((err) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H5',location:'background.js:onMessage:fetchProxy:catch',message:'fetchProxy failed before response',data:{errorMessage:err?.message||String(err)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       sendResponse({ ok: false, status: 0, contentType: '', done: true, chunk: '', text: '', error: err.message });
     });
 

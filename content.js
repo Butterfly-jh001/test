@@ -6,15 +6,11 @@ function getPageContent() {
 }
 
 /**
- * CORS 우회: content script 대신 background service worker가 fetch를 수행한다.
- * 스트리밍 응답은 background가 청크 단위로 fetchProxyChunk 메시지를 탭에 전송하고,
- * 여기서 수신해 updateCallback을 실시간으로 호출한다.
- *
- * @param {string} url
- * @param {object} options - { method, headers, body }
- * @param {function|null} updateCallback - 스트리밍 중 누적 텍스트를 받는 콜백 (없으면 전체 텍스트 반환)
- * @param {string} model - 스트림 파싱에 사용할 모델 ID
- * @returns {Promise<string>} 최종 누적 응답 텍스트
+ * CORS 우회 + LNA 팝업 방지:
+ * content script(웹페이지 오리진)에서 직접 fetch하면
+ *   - 외부 API: CORS 오류
+ *   - localhost: Chrome LNA 팝업 (Chrome 142+)
+ * 두 경우 모두 background service worker(chrome-extension:// 오리진)를 경유하면 해결된다.
  */
 function fetchViaBackground(url, options = {}, updateCallback = null, model = '') {
     return new Promise((resolve, reject) => {
@@ -240,10 +236,14 @@ let lastMarkdownResult = "";
 
 function normalizeCerebrasModel(model) {
     const fallback = 'llama3.1-8b';
-    const allowed = ['llama3.1-8b', 'gpt-oss-120b', 'qwen-3-235b-a22b-instruct-2507'];
     if (!model || typeof model !== 'string') return fallback;
+
     const trimmed = model.trim();
-    return allowed.includes(trimmed) ? trimmed : fallback;
+    // Legacy / invalid IDs observed in the wild
+    if (trimmed === 'llama-3.3-70b') return fallback;
+    if (trimmed === 'gpt-oss-120b') return fallback;
+
+    return trimmed;
 }
 
 function isCerebrasModelNotFound(status, errorText) {
@@ -280,149 +280,70 @@ async function sendToAI(text, instruction) {
             'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey',
             'ollamaApiUrl', 'ollamaModelName', 'lmstudioApiUrl', 'lmstudioModelName'
         ]);
-        // #region agent log
-        fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H3',location:'content.js:sendToAI:storage',message:'Loaded model selection from storage',data:{selectedModel:result.selectedModel,cerebrasModel:result.cerebrasModel,hasCerebrasKey:Boolean(result.cerebrasApiKey)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
 
         const instructions = result.instructions || [];
         const combinedInstruction = instructions.join('\n') + '\n' + instruction;
         showLoading(combinedInstruction);
         updateProgress("API에 요청을 보내는 중...");
 
-        if (result.selectedModel === 'gemini' || result.selectedModel === 'geminiflash') {
-            try {
-                const apiConfig = await getAPIConfig(result, instruction, text);
-                const proxyRes = await fetchViaBackground(apiConfig.url, {
-                    method: 'POST',
-                    headers: apiConfig.headers,
-                    body: apiConfig.body
-                });
+        // 모든 모델 통합 처리
+        switch (result.selectedModel) {
+            case 'groq': {
+                const maxChunkLength = 20000;
+                if (text.length > maxChunkLength) {
+                    updateProgress("텍스트가 길어 청크로 분할 처리합니다...");
+                    const chunks = splitText(text, maxChunkLength);
+                    let fullResponse = "";
 
-                if (!proxyRes.ok) {
-                    throw new Error(`API 요청 실패 (${proxyRes.status})`);
-                }
+                    for (let i = 0; i < chunks.length; i++) {
+                        updateProgress(`청크 ${i + 1}/${chunks.length} 처리 중...`);
+                        const chunkInstruction = chunks.length > 1
+                            ? `${instruction} (이 부분: 청크 ${i + 1}/${chunks.length})`
+                            : instruction;
 
-                let data;
-                try { data = JSON.parse(proxyRes.text); } catch(e) { throw new Error('응답 파싱 실패'); }
+                        const apiConfig = await getAPIConfig(result, chunkInstruction, chunks[i]);
+                        const chunkResponse = await fetchViaBackground(
+                            apiConfig.url,
+                            { method: 'POST', headers: apiConfig.headers, body: apiConfig.body },
+                            (partial) => { if (i === 0) updateAIMessage(partial); },
+                            'groq'
+                        );
 
-                if (data.error || !data.candidates || data.candidates.length === 0) {
-                    // 첫 시도에서 실패한 경우
-                    if (!retryAttempted) {
-                        retryAttempted = true;
-                        const newsContent = document.querySelector('#newsct_article');
-                        if (newsContent) {
-                            window.getSelection().removeAllRanges();
-                            const range = document.createRange();
-                            range.selectNodeContents(newsContent);
-                            window.getSelection().addRange(range);
-
-                            const selectedText = window.getSelection().toString();
-                            if (selectedText) {
-                                // 본문 선택 후 다시 시도
-                                await sendToAI(selectedText, instruction);
-                                return;
-                            }
-                        }
-                        throw new Error('뉴스 본문을 찾을 수 없습니다.');
-                    } else {
-                        // 본문 선택 후에도 실패한 경우
-                        throw new Error('요약 작업을 수행할 수 없습니다. API 접근이 제한되었습니다.');
-                    }
-                }
-
-                // API 응답 성공
-                const aiResponse = extractResponseContent(data, result.selectedModel);
-                showResult(aiResponse);
-                addModelNameToLastMessage(result.selectedModel);
-                retryAttempted = false; // 성공 시 플래그 초기화
-
-            } catch (geminiError) {
-                console.error('Gemini API 오류:', geminiError);
-
-                // 첫 시도에서 실패한 경우
-                if (!retryAttempted) {
-                    retryAttempted = true;
-                    const newsContent = document.querySelector('#newsct_article');
-                    if (newsContent) {
-                        window.getSelection().removeAllRanges();
-                        const range = document.createRange();
-                        range.selectNodeContents(newsContent);
-                        window.getSelection().addRange(range);
-
-                        const selectedText = window.getSelection().toString();
-                        if (selectedText) {
-                            // 본문 선택 후 다시 시도
-                            await sendToAI(selectedText, instruction);
-                            return;
+                        if (chunks.length > 1) {
+                            fullResponse += `\n\n--- 청크 ${i + 1} 요약 ---\n${chunkResponse}`;
                         } else {
-                            showResult("뉴스 본문을 찾을 수 없습니다. 직접 본문을 선택해주세요.");
+                            fullResponse = chunkResponse;
                         }
-                    } else {
-                        showResult(`요약할 수 없습니다: ${geminiError.message}`);
                     }
-                } else {
-                    // 본문 선택 후에도 실패한 경우
-                    showResult("API 접근이 제한되어 요약을 완료할 수 없습니다. 나중에 다시 시도해주세요.");
+
+                    const finalResponse = chunks.length > 1
+                        ? `전체 요약 (${chunks.length}개 청크):${fullResponse}`
+                        : fullResponse;
+
+                    finalizeStreamingOverlay(finalResponse, 'groq');
+                    return;
                 }
-            }
-        } else {
-            // 다른 모델들의 처리 로직
-            switch (result.selectedModel) {
-                case 'groq':
-                    const maxChunkLength = 20000;
-                    if (text.length > maxChunkLength) {
-                        updateProgress("텍스트가 길어 청크로 분할 처리합니다...");
-                        const chunks = splitText(text, maxChunkLength);
-                        let fullResponse = "";
-
-                        for (let i = 0; i < chunks.length; i++) {
-                            updateProgress(`청크 ${i + 1}/${chunks.length} 처리 중...`);
-                            const chunkInstruction = chunks.length > 1
-                                ? `${instruction} (이 부분: 청크 ${i + 1}/${chunks.length})`
-                                : instruction;
-
-                            const apiConfig = await getAPIConfig(result, chunkInstruction, chunks[i]);
-                            const chunkResponse = await fetchViaBackground(
-                                apiConfig.url,
-                                { method: 'POST', headers: apiConfig.headers, body: apiConfig.body },
-                                (partial) => { if (i === 0) updateAIMessage(partial); },
-                                'groq'
-                            );
-
-                            if (chunks.length > 1) {
-                                fullResponse += `\n\n--- 청크 ${i + 1} 요약 ---\n${chunkResponse}`;
-                            } else {
-                                fullResponse = chunkResponse;
-                            }
-                        }
-
-                        const finalResponse = chunks.length > 1
-                            ? `전체 요약 (${chunks.length}개 청크):${fullResponse}`
-                            : fullResponse;
-
-                        showResult(finalResponse);
-                        addModelNameToLastMessage('groq');
-                        return;
-                    }
-                    break;
-
-                case 'Cerebras':
-                    if (text.length > 8000) {
-                        const chunks = splitText(text, 7000);
-                        let responses = [];
-                        for (let i = 0; i < chunks.length; i++) {
-                            updateProgress(`청크 처리 중 ${i + 1}/${chunks.length}`);
-                            const chunkResponse = await processSingleChunk(chunks[i], instruction, result);
-                            responses.push(chunkResponse);
-                        }
-                        showResult(responses.join('\n\n'));
-                        addModelNameToLastMessage('Cerebras');
-                        return;
-                    }
-                    break;
+                break;
             }
 
-            // 일반적인 API 처리
+            case 'Cerebras': {
+                if (text.length > 8000) {
+                    const chunks = splitText(text, 7000);
+                    let responses = [];
+                    for (let i = 0; i < chunks.length; i++) {
+                        updateProgress(`청크 처리 중 ${i + 1}/${chunks.length}`);
+                        const chunkResponse = await processSingleChunk(chunks[i], instruction, result);
+                        responses.push(chunkResponse);
+                    }
+                    showResult(responses.join('\n\n'));
+                    addModelNameToLastMessage('Cerebras');
+                    return;
+                }
+                break;
+            }
+        }
+
+        // 일반적인 API 처리 (모든 모델 공통)
             const apiConfig = await getAPIConfig(result, combinedInstruction, text);
             console.log('API Config:', { url: apiConfig.url, isStreaming: apiConfig.isStreaming, model: result.selectedModel });
 
@@ -456,24 +377,16 @@ async function sendToAI(text, instruction) {
                 }
             } else {
                 // 비스트리밍 (Cerebras 등)
-                let proxyText = '';
-                try {
-                    proxyText = await fetchViaBackground(apiConfig.url, {
-                        method: 'POST',
-                        headers: apiConfig.headers,
-                        body: apiConfig.body
-                    });
-                    // #region agent log
-                    fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H2',location:'content.js:sendToAI:nonstream-response',message:'Received non-streaming proxy response',data:{selectedModel:result.selectedModel,responseType:typeof proxyText,responsePreview:String(proxyText).slice(0,220)},timestamp:Date.now()})}).catch(()=>{});
-                    // #endregion
-                } catch (requestError) {
-                    const message = requestError?.message || String(requestError);
-                    const statusMatch = message.match(/API 요청 실패 \((\d+)\):\s*([\s\S]*)$/);
-                    const status = statusMatch ? Number(statusMatch[1]) : 0;
-                    const errorText = statusMatch ? statusMatch[2] : message;
+                const proxyRes = await fetchViaBackground(apiConfig.url, {
+                    method: 'POST',
+                    headers: apiConfig.headers,
+                    body: apiConfig.body
+                });
 
+                if (!proxyRes.ok || proxyRes === '') {
+                    const errorText = typeof proxyRes === 'object' ? (proxyRes.text || '') : String(proxyRes);
                     // Cerebras 모델 미존재(404) 폴백
-                    if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(status, errorText)) {
+                    if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(proxyRes.status, errorText)) {
                         const fallbackModel = 'llama3.1-8b';
                         const contextMessage = `현재 웹페이지의 내용: ${text}`;
                         const contentForUser = `${contextMessage}\n\n${combinedInstruction}`;
@@ -482,25 +395,26 @@ async function sendToAI(text, instruction) {
                             instructions: apiConfig.instructions,
                             content: contentForUser
                         });
-                        proxyText = await fetchViaBackground(apiConfig.url, {
+                        const retryProxyRes = await fetchViaBackground(apiConfig.url, {
                             method: 'POST',
                             headers: apiConfig.headers,
                             body: fallbackBody
                         });
+                        try {
+                            const retryData = JSON.parse(retryProxyRes);
+                            aiResponse = extractResponseContent(retryData, result.selectedModel);
+                        } catch(e) { throw new Error('폴백 응답 파싱 실패'); }
                     } else {
-                        throw requestError;
+                        throw new Error(`API 요청 실패: ${errorText}`);
                     }
-                }
-
-                if (!proxyText || proxyText === '') {
-                    throw new Error('응답이 비어있습니다.');
-                }
-                try {
-                    const data = JSON.parse(proxyText);
-                    if (data.error) throw new Error(`API 에러: ${data.error.message || JSON.stringify(data.error)}`);
-                    aiResponse = extractResponseContent(data, result.selectedModel);
-                } catch (jsonError) {
-                    throw new Error(`응답 파싱 실패: ${jsonError.message}`);
+                } else {
+                    try {
+                        const data = JSON.parse(proxyRes);
+                        if (data.error) throw new Error(`API 에러: ${data.error.message || JSON.stringify(data.error)}`);
+                        aiResponse = extractResponseContent(data, result.selectedModel);
+                    } catch (jsonError) {
+                        throw new Error(`응답 파싱 실패: ${jsonError.message}`);
+                    }
                 }
             }
 
@@ -510,11 +424,8 @@ async function sendToAI(text, instruction) {
             }
             showResult(aiResponse);
             addModelNameToLastMessage(result.selectedModel);
-        }
+
     } catch (error) {
-        // #region agent log
-        fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H4',location:'content.js:sendToAI:catch',message:'sendToAI failed',data:{errorType:typeof error,errorMessage:error?.message||null,errorString:String(error)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         console.error('Error in sendToAI:', error);
         showResult(`오류가 발생했습니다: ${error.message}`);
     }
@@ -522,35 +433,35 @@ async function sendToAI(text, instruction) {
 
 async function processSingleChunk(chunk, instruction, result) {
     const apiConfig = await getAPIConfig(result, instruction, chunk);
-    let proxyText = '';
-    try {
-        proxyText = await fetchViaBackground(apiConfig.url, {
-            method: 'POST',
-            headers: apiConfig.headers,
-            body: apiConfig.body
-        });
-    } catch (requestError) {
-        const message = requestError?.message || String(requestError);
-        const statusMatch = message.match(/API 요청 실패 \((\d+)\):\s*([\s\S]*)$/);
-        const status = statusMatch ? Number(statusMatch[1]) : 0;
-        const errorText = statusMatch ? statusMatch[2] : message;
-        if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(status, errorText)) {
+    const proxyRes = await fetchViaBackground(apiConfig.url, {
+        method: 'POST',
+        headers: apiConfig.headers,
+        body: apiConfig.body
+    });
+
+    if (!proxyRes.ok) {
+        const errorText = proxyRes.text || '';
+        if (result.selectedModel === 'Cerebras' && isCerebrasModelNotFound(proxyRes.status, errorText)) {
             const fallbackBody = buildCerebrasRequestBody({
                 model: 'llama3.1-8b',
                 instructions: apiConfig.instructions,
                 content: chunk
             });
-            proxyText = await fetchViaBackground(apiConfig.url, {
+            const retryProxyRes = await fetchViaBackground(apiConfig.url, {
                 method: 'POST',
                 headers: apiConfig.headers,
                 body: fallbackBody
             });
-        } else {
-            throw new Error(`청크 처리 중 오류 발생 (${status || 'unknown'}): ${errorText}`);
+            if (!retryProxyRes.ok) {
+                throw new Error(`청크 처리 중 오류 발생 (${retryProxyRes.status}): ${retryProxyRes.text}`);
+            }
+            const retryData = JSON.parse(retryProxyRes.text);
+            return extractResponseContent(retryData, result.selectedModel);
         }
+        throw new Error(`청크 처리 중 오류 발생 (${proxyRes.status}): ${errorText}`);
     }
 
-    const data = JSON.parse(proxyText);
+    const data = JSON.parse(proxyRes.text);
     return extractResponseContent(data, result.selectedModel);
 }
 
@@ -804,9 +715,6 @@ async function getAPIConfig(result, instruction, text) {
             };
 
             const selectedModel = normalizeCerebrasModel(result.cerebrasModel);
-            // #region agent log
-            fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H1',location:'content.js:getAPIConfig:cerebras-initial',message:'Normalized Cerebras model for request',data:{rawCerebrasModel:result.cerebrasModel,normalizedCerebrasModel:selectedModel},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
 
             config.body = JSON.stringify({
                 model: selectedModel,
@@ -1079,9 +987,6 @@ async function getAPIConfig(result, instruction, text) {
                 };
 
                 const selectedModel = normalizeCerebrasModel(result.cerebrasModel);
-                // #region agent log
-                fetch('http://127.0.0.1:7448/ingest/ceb5ee1a-9dde-423a-88c4-b29b5d9e8308',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3699e1'},body:JSON.stringify({sessionId:'3699e1',runId:'pre-fix',hypothesisId:'H1',location:'content.js:getAPIConfig:cerebras-switch',message:'Built Cerebras request body from normalized model',data:{rawCerebrasModel:result.cerebrasModel,normalizedCerebrasModel:selectedModel},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
 
                 config.body = JSON.stringify({
                     model: selectedModel,
