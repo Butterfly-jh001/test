@@ -120,9 +120,10 @@ document.addEventListener('DOMContentLoaded', function () {
     function normalizeCerebrasModel(model) {
         const fallback = 'llama3.1-8b';
         if (!model || typeof model !== 'string') return fallback;
-        const allowed = ['llama3.1-8b', 'gpt-oss-120b', 'qwen-3-235b-a22b-instruct-2507'];
         const trimmed = model.trim();
-        return allowed.includes(trimmed) ? trimmed : fallback;
+        if (trimmed === 'llama-3.3-70b') return fallback;
+        if (trimmed === 'gpt-oss-120b') return fallback;
+        return trimmed;
     }
 
     function isCerebrasModelNotFound(status, errorText) {
@@ -519,7 +520,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     "content": `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
                                 }
                             ],
-                            "model": "llama-3.1-70b-versatile",
+                            "model": "llama-3.3-70b-versatile",
                             "temperature": 0.7,
                             "stream": true
                         });
@@ -773,7 +774,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                 }
                             ],
                             stream: true,
-                            temperature: 0.7
+                            temperature: 0.7,
+                            max_tokens: 4096
                         });
                         config.isStreaming = true;
                         break;
