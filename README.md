@@ -187,6 +187,9 @@ This project is under the MIT License.
 - [List major dependencies if any]
 
 ### Version History
+**v1.6.1 (May 13, 2026)**
+- Left-aligned the Close and Copy buttons
+- Changed the Gemini 3.1 Flash Lite endpoint
 
 **v1.6.0 (April 18, 2026)**
 - LM Studio option added, Ollama support available
