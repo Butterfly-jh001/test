@@ -665,7 +665,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (!gemini31ApiKey) {
                             throw new Error('Gemini 3.1 Flash Lite API 키가 설정되지 않았습니다.');
                         }
-                        const modelName = 'gemini-3.1-flash-lite-preview';
+                        const modelName = 'gemini-3.1-flash-lite';
                         // Gemini 3.1 Flash Lite 스트리밍 엔드포인트
                         config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${gemini31ApiKey.trim()}`;
                         config.headers = {

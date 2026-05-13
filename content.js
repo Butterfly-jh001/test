@@ -932,7 +932,7 @@ async function getAPIConfig(result, instruction, text) {
                 if (!apiKey) {
                     throw new Error('Gemini 3.1 Flash Lite API 키가 설정되지 않았습니다.');
                 }
-                const modelName = 'gemini-3.1-flash-lite-preview';
+                const modelName = 'gemini-3.1-flash-lite';
                 // Gemini 3.1 Flash Lite 스트리밍 엔드포인트
                 config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`;
                 config.headers = {
@@ -1031,6 +1031,10 @@ async function getAPIConfig(result, instruction, text) {
             case 'lmstudio': {
                 const lmstudioUrl = result.lmstudioApiUrl || 'http://localhost:1234';
                 const lmstudioModel = result.lmstudioModelName || 'local-model';
+                // 컨텍스트 초과 방지: 입력 텍스트를 12000자로 제한
+                const lmstudioText = contextMessage.length > 12000
+                    ? contextMessage.slice(0, 12000) + '\n...(이하 생략)'
+                    : contextMessage;
                 config.url = `${lmstudioUrl}/v1/chat/completions`;
                 config.headers = {
                     'Content-Type': 'application/json'
@@ -1044,11 +1048,12 @@ async function getAPIConfig(result, instruction, text) {
                         },
                         {
                             role: "user",
-                            content: `${contextMessage}\n\n${instruction}`
+                            content: `${lmstudioText}\n\n${instruction}`
                         }
                     ],
                     stream: true,
-                    temperature: 0.7
+                    temperature: 0.7,
+                    max_tokens: 4096  // 응답이 중간에 잘리지 않도록 명시
                 });
                 config.isStreaming = true;
                 break;
@@ -1183,7 +1188,7 @@ function finalizeStreamingOverlay(finalText, model) {
     if (!overlay.querySelector('#overlayBtnRow')) {
         const btnRow = document.createElement('div');
         btnRow.id = 'overlayBtnRow';
-        btnRow.style.cssText = 'display:flex; justify-content:center; align-items:center; gap:10px; margin-top:16px;';
+        btnRow.style.cssText = 'display:flex; justify-content:flex-start; align-items:center; gap:10px; margin-top:16px;';
 
         const closeBtn = document.createElement('button');
         closeBtn.id = 'closeOverlay';
@@ -1214,7 +1219,7 @@ function showResult(result) {
     content.innerHTML = `
     <h2 style="margin-top: 0; margin-bottom: 20px; color: #2c3e50;">결과</h2>
     <div id="resultText" class="markdown-body" style="margin-bottom: 20px; line-height: 1.6; color: #444;"></div>
-    <div id="overlayBtnRow" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:16px;">
+    <div id="overlayBtnRow" style="display:flex; justify-content:flex-start; align-items:center; gap:10px; margin-top:16px;">
       <button id="closeOverlay">닫기</button>
       <button id="copyResult">복사</button>
       <span id="aiModelName"></span>
@@ -1302,6 +1307,7 @@ function addStyles() {
     }
     #overlayBtnRow {
       margin-bottom: 0;
+      justify-content: flex-start;
     }
     #summaryOverlay h2 {
       font-size: 1.4em;
