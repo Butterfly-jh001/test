@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var ollamaApiUrlInput = document.getElementById('ollamaApiUrl');
     var lmstudioApiUrlInput = document.getElementById('lmstudioApiUrl');
     var lmstudioModelNameInput = document.getElementById('lmstudioModelName');
+    var lmstudioContextLengthInput = document.getElementById('lmstudioContextLength');
     var cerebrasApiKeyInput = document.getElementById('cerebrasApiKey');
     var cerebrasModelRadios = document.querySelectorAll('input[name="cerebrasModel"]');
     var google20FlashApiKeyInput = document.getElementById('google20FlashApiKey');
@@ -175,6 +176,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (lmstudioModelNameInput) {
             lmstudioModelNameInput.value = data.lmstudioModelName || '';
         }
+        if (lmstudioContextLengthInput) {
+            lmstudioContextLengthInput.value = data.lmstudioContextLength || 8000;
+        }
         cerebrasApiKeyInput.value = data.cerebrasApiKey || '';
 
         // google20FlashApiKey 설정
@@ -306,6 +310,7 @@ document.addEventListener('DOMContentLoaded', function () {
         'ollamaApiUrl',
         'lmstudioApiUrl',
         'lmstudioModelName',
+        'lmstudioContextLength',
         'selectedModel',
         'cerebrasApiKey',
         'cerebrasModel'
@@ -325,6 +330,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var ollamaApiUrl = ollamaApiUrlInput ? ollamaApiUrlInput.value.trim() : 'http://localhost:11434';
         var lmstudioApiUrl = lmstudioApiUrlInput ? lmstudioApiUrlInput.value.trim() : 'http://localhost:1234';
         var lmstudioModelName = lmstudioModelNameInput ? lmstudioModelNameInput.value.trim() : '';
+        var lmstudioContextLength = lmstudioContextLengthInput ? parseInt(lmstudioContextLengthInput.value) || 8000 : 8000;
         var cerebrasApiKey = cerebrasApiKeyInput.value.trim();
         var google20FlashApiKey = google20FlashApiKeyInput ? google20FlashApiKeyInput.value.trim() : '';
         var gemini25FlashApiKey = gemini25FlashApiKeyInput ? gemini25FlashApiKeyInput.value.trim() : '';
@@ -356,6 +362,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ollamaApiUrl: ollamaApiUrl,
             lmstudioApiUrl: lmstudioApiUrl,
             lmstudioModelName: lmstudioModelName,
+            lmstudioContextLength: lmstudioContextLength,
             selectedModel: selectedModel,
             cerebrasApiKey: cerebrasApiKey,
             cerebrasModel: normalizedCerebrasModel

@@ -133,6 +133,9 @@
                 <label for="lmstudioModelName">LM Studio 모델 이름:</label>
                 <input type="text" id="lmstudioModelName" placeholder="모델 이름을 입력하세요 (예: llama-3-8b-instruct)">
             </div>
+            <label for="lmstudioContextLength">LM Studio 컨텍스트 길이 (Context Length):</label>
+            <input type="number" id="lmstudioContextLength" placeholder="예: 8000" min="1024" max="131072" step="1024">
+            <small style="color:#888;">LM Studio에서 설정한 Context Length와 동일하게 입력하세요. (기본값: 8000)</small>
         </div>
         <div id="ollamaApiSection">
             <label for="ollamaApiUrl">Ollama API URL:</label>

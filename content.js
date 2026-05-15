@@ -307,7 +307,7 @@ async function sendToAI(text, instruction) {
             'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey',
             'cerebrasModel', 'selectedModel', 'instructions', 'google20FlashApiKey',
             'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey',
-            'ollamaApiUrl', 'ollamaModelName', 'lmstudioApiUrl', 'lmstudioModelName'
+            'ollamaApiUrl', 'ollamaModelName', 'lmstudioApiUrl', 'lmstudioModelName', 'lmstudioContextLength'
         ]);
 
         const instructions = result.instructions || [];
@@ -1031,10 +1031,14 @@ async function getAPIConfig(result, instruction, text) {
             case 'lmstudio': {
                 const lmstudioUrl = result.lmstudioApiUrl || 'http://localhost:1234';
                 const lmstudioModel = result.lmstudioModelName || 'local-model';
-                // 컨텍스트 초과 방지: 입력 텍스트를 12000자로 제한
-                const lmstudioText = contextMessage.length > 12000
-                    ? contextMessage.slice(0, 12000) + '\n...(이하 생략)'
+                const lmstudioContextLength = result.lmstudioContextLength || 8000;
+                // 컨텍스트 초과 방지: 응답용 토큰(1500)을 남기고 나머지를 입력에 사용
+                // 한국어는 글자당 약 2토큰, 영어는 약 0.3토큰으로 보수적으로 계산
+                const maxInputChars = Math.floor((lmstudioContextLength - 1500) * 0.45);
+                const lmstudioText = contextMessage.length > maxInputChars
+                    ? contextMessage.slice(0, maxInputChars) + '\n...(이하 생략)'
                     : contextMessage;
+                const maxOutputTokens = Math.min(Math.floor(lmstudioContextLength * 0.4), 4096);
                 config.url = `${lmstudioUrl}/v1/chat/completions`;
                 config.headers = {
                     'Content-Type': 'application/json'
@@ -1053,7 +1057,7 @@ async function getAPIConfig(result, instruction, text) {
                     ],
                     stream: true,
                     temperature: 0.7,
-                    max_tokens: 4096  // 응답이 중간에 잘리지 않도록 명시
+                    max_tokens: maxOutputTokens
                 });
                 config.isStreaming = true;
                 break;

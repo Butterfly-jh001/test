@@ -475,7 +475,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 'ollamaApiUrl',
                 'ollamaModelName',
                 'lmstudioApiUrl',
-                'lmstudioModelName'
+                'lmstudioModelName',
+                'lmstudioContextLength'
             ], function (result) {
                 if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey &&
                     !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.gemini3FlashApiKey &&
@@ -753,6 +754,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     case 'lmstudio': {
                         const lmstudioUrl = result.lmstudioApiUrl || 'http://localhost:1234';
                         const lmstudioModel = result.lmstudioModelName || 'local-model';
+                        const lmstudioContextLength = result.lmstudioContextLength || 8000;
+                        const maxInputChars = Math.floor((lmstudioContextLength - 1500) * 0.45);
+                        const maxOutputTokens = Math.min(Math.floor(lmstudioContextLength * 0.4), 4096);
+                        const trimmedContext = contextMessage.length > maxInputChars
+                            ? contextMessage.slice(0, maxInputChars) + '\n...(이하 생략)'
+                            : contextMessage;
                         config.url = `${lmstudioUrl}/v1/chat/completions`;
                         config.headers = {
                             'Content-Type': 'application/json'
@@ -770,12 +777,12 @@ document.addEventListener('DOMContentLoaded', function () {
                                 })),
                                 {
                                     role: "user",
-                                    content: `${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                    content: `${trimmedContext}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
                                 }
                             ],
                             stream: true,
                             temperature: 0.7,
-                            max_tokens: 4096
+                            max_tokens: maxOutputTokens
                         });
                         config.isStreaming = true;
                         break;
