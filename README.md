@@ -187,6 +187,9 @@ This project is under the MIT License.
 - [List major dependencies if any]
 
 ### Version History
+**v1.6.2 (May 15, 2026)**
+- Add context length input to options in LM Studio
+
 **v1.6.1 (May 13, 2026)**
 - Left-aligned the Close and Copy buttons
 - Changed the Gemini 3.1 Flash Lite endpoint
