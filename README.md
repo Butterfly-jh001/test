@@ -187,6 +187,9 @@ This project is under the MIT License.
 - [List major dependencies if any]
 
 ### Version History
+**v1.7.0 (May 15, 2026)**
+- Add Gemini 3.5 flash
+
 **v1.6.2 (May 15, 2026)**
 - Add context length input to options in LM Studio
 
