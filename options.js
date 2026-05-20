@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var gemini25FlashApiKeyInput = document.getElementById('gemini25FlashApiKey');
     var gemini3FlashApiKeyInput = document.getElementById('gemini3FlashApiKey');
     var gemini31FlashLiteApiKeyInput = document.getElementById('gemini31FlashLiteApiKey');
+    var gemini35FlashApiKeyInput = document.getElementById('gemini35FlashApiKey');
 
     var aiModelSelect = document.getElementById('aiModel');
     var saveButton = document.getElementById('save');
@@ -73,6 +74,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     apiKeyGoogle30FlashPlaceholder: 'Google 3.0 플래시 API 키를 입력하세요',
                     apiKeyGoogle31FlashLite: 'Google 3.1 플래시 라이트 API 키:',
                     apiKeyGoogle31FlashLitePlaceholder: 'Google 3.1 플래시 라이트 API 키를 입력하세요',
+                    apiKeyGoogle35Flash: 'Google 3.5 플래시 API 키:',
+                    apiKeyGoogle35FlashPlaceholder: 'Google 3.5 플래시 API 키를 입력하세요',
                 },
                 en: {
                     title: 'AI Summary Extension Settings',
@@ -93,6 +96,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     apiKeyGoogle30FlashPlaceholder: 'Enter Google 3.0 Flash API Key',
                     apiKeyGoogle31FlashLite: 'Google 3.1 Flash Lite API Key:',
                     apiKeyGoogle31FlashLitePlaceholder: 'Enter Google 3.1 Flash Lite API Key',
+                    apiKeyGoogle35Flash: 'Google 3.5 Flash API Key:',
+                    apiKeyGoogle35FlashPlaceholder: 'Enter Google 3.5 Flash API Key',
                 }
             };
 
@@ -111,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const apiInputs = document.querySelectorAll('input[type="text"][id$="ApiKey"]');
             apiInputs.forEach(input => {
                 // General placeholder for most API keys, exclude the new one which has specific translations
-                if (input.id !== 'google20FlashApiKey' && input.id !== 'gemini25FlashApiKey' && input.id !== 'gemini3FlashApiKey' && input.id !== 'gemini31FlashLiteApiKey' && input.id !== 'ollamaModelName' && input.id !== 'instructionInput') {
+                if (input.id !== 'google20FlashApiKey' && input.id !== 'gemini25FlashApiKey' && input.id !== 'gemini3FlashApiKey' && input.id !== 'gemini31FlashLiteApiKey' && input.id !== 'gemini35FlashApiKey' && input.id !== 'ollamaModelName' && input.id !== 'instructionInput') {
                     input.placeholder = translations[lang].apiKeyPlaceholder;
                 }
             });
@@ -151,6 +156,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             if (gemini31FlashLiteApiKeyInput) {
                 gemini31FlashLiteApiKeyInput.placeholder = translations[lang].apiKeyGoogle31FlashLitePlaceholder || 'Enter Google 3.1 Flash Lite API Key';
+            }
+
+            // Specific translations for Gemini 3.5 Flash
+            const gemini35FlashLabel = document.querySelector('label[for="gemini35FlashApiKey"]');
+            if (gemini35FlashLabel) {
+                gemini35FlashLabel.textContent = translations[lang].apiKeyGoogle35Flash || 'Google 3.5 Flash API Key:';
+            }
+            if (gemini35FlashApiKeyInput) {
+                gemini35FlashApiKeyInput.placeholder = translations[lang].apiKeyGoogle35FlashPlaceholder || 'Enter Google 3.5 Flash API Key';
             }
         });
     }
@@ -201,6 +215,11 @@ document.addEventListener('DOMContentLoaded', function () {
             gemini31FlashLiteApiKeyInput.value = data.gemini31FlashLiteApiKey || '';
         }
 
+        // gemini35FlashApiKey 설정
+        if (gemini35FlashApiKeyInput) {
+            gemini35FlashApiKeyInput.value = data.gemini35FlashApiKey || '';
+        }
+
         // AI 모델 선택값 설정
         aiModelSelect.value = data.selectedModel || 'cohere';
 
@@ -223,6 +242,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const gemini25FlashSection = document.getElementById('gemini25FlashApiSection');
         const gemini3FlashSection = document.getElementById('gemini3FlashApiSection');
         const gemini31FlashLiteSection = document.getElementById('gemini31FlashLiteApiSection');
+        const gemini35FlashSection = document.getElementById('gemini35FlashApiSection');
         const groqSection = document.getElementById('groqApiSection');
         const ollamaSection = document.getElementById('ollamaApiSection');
         const ollamaModelNameSection = document.getElementById('ollamaModelNameSection');
@@ -238,6 +258,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (gemini25FlashSection) gemini25FlashSection.style.display = 'none';
         if (gemini3FlashSection) gemini3FlashSection.style.display = 'none';
         if (gemini31FlashLiteSection) gemini31FlashLiteSection.style.display = 'none';
+        if (gemini35FlashSection) gemini35FlashSection.style.display = 'none';
         if (groqSection) groqSection.style.display = 'none';
         if (ollamaSection) ollamaSection.style.display = 'none';
         if (ollamaModelNameSection) ollamaModelNameSection.style.display = 'none';
@@ -278,6 +299,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     gemini31FlashLiteSection.style.display = 'block';
                 }
                 break;
+            case 'gemini35Flash':
+                if (gemini35FlashSection) {
+                    gemini35FlashSection.style.display = 'block';
+                }
+                break;
             case 'groq':
                 if (groqSection) groqSection.style.display = 'block';
                 break;
@@ -304,6 +330,7 @@ document.addEventListener('DOMContentLoaded', function () {
         'gemini25FlashApiKey',
         'gemini3FlashApiKey',
         'gemini31FlashLiteApiKey',
+        'gemini35FlashApiKey',
         'groqApiKey',
         'ollamaApiKey',
         'ollamaModelName',
@@ -336,6 +363,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var gemini25FlashApiKey = gemini25FlashApiKeyInput ? gemini25FlashApiKeyInput.value.trim() : '';
         var gemini3FlashApiKey = gemini3FlashApiKeyInput ? gemini3FlashApiKeyInput.value.trim() : '';
         var gemini31FlashLiteApiKey = gemini31FlashLiteApiKeyInput ? gemini31FlashLiteApiKeyInput.value.trim() : '';
+        var gemini35FlashApiKey = gemini35FlashApiKeyInput ? gemini35FlashApiKeyInput.value.trim() : '';
         var selectedModel = aiModelSelect.value;
         var cerebrasModel;
 
@@ -356,6 +384,7 @@ document.addEventListener('DOMContentLoaded', function () {
             gemini25FlashApiKey: gemini25FlashApiKey,
             gemini3FlashApiKey: gemini3FlashApiKey,
             gemini31FlashLiteApiKey: gemini31FlashLiteApiKey,
+            gemini35FlashApiKey: gemini35FlashApiKey,
             groqApiKey: groqApiKey,
             ollamaApiKey: ollamaApiKey,
             ollamaModelName: ollamaModelName,

@@ -465,6 +465,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 'gemini25FlashApiKey',
                 'gemini3FlashApiKey',
                 'gemini31FlashLiteApiKey',
+                'gemini35FlashApiKey',
                 'google20FlashApiKey',
                 'gemini20FlashModelName',
                 'groqApiKey',
@@ -480,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ], function (result) {
                 if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey &&
                     !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.gemini3FlashApiKey &&
-                    !result.gemini31FlashLiteApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
+                    !result.gemini31FlashLiteApiKey && !result.gemini35FlashApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
                     throw new Error("API 키를 설정해주세요.");
                 }
 
@@ -672,6 +673,51 @@ document.addEventListener('DOMContentLoaded', function () {
                         config.headers = {
                             'Content-Type': 'application/json',
                             'x-goog-api-key': gemini31ApiKey.trim()
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: {
+                                temperature: 0,
+                                thinkingConfig: {
+                                    thinkingBudget: 0
+                                }
+                            },
+                            safetySettings: [
+                                {
+                                    category: "HARM_CATEGORY_HATE_SPEECH",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_HARASSMENT",
+                                    threshold: "BLOCK_NONE"
+                                }
+                            ]
+                        });
+                        config.isStreaming = true;
+                        break;
+                    }
+                    case 'gemini35Flash': {
+                        const gemini35ApiKey = result.gemini35FlashApiKey;
+                        if (!gemini35ApiKey) {
+                            throw new Error('Gemini 3.5 Flash API 키가 설정되지 않았습니다.');
+                        }
+                        const modelName = 'gemini-3.5-flash';
+                        config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${gemini35ApiKey.trim()}`;
+                        config.headers = {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': gemini35ApiKey.trim()
                         };
                         config.body = (msg) => JSON.stringify({
                             contents: [{

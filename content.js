@@ -65,7 +65,7 @@ function fetchViaBackground(url, options = {}, updateCallback = null, model = ''
                 if (updateCallback && model) {
                     // 모델별 실시간 파싱
                     if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash'
-                        || model === 'gemini3Flash' || model === 'gemini31FlashLite') {
+                        || model === 'gemini3Flash' || model === 'gemini31FlashLite' || model === 'gemini35Flash') {
                         const result = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
                         if (result.processed) {
                             buffer = result.remainingBuffer;
@@ -105,7 +105,7 @@ function fetchViaBackground(url, options = {}, updateCallback = null, model = ''
                 // 버퍼에 남은 데이터 처리
                 if (buffer.trim() && updateCallback && model) {
                     if (model.startsWith('gemini') || model === 'gemini20Flash' || model === 'gemini25Flash'
-                        || model === 'gemini3Flash' || model === 'gemini31FlashLite') {
+                        || model === 'gemini3Flash' || model === 'gemini31FlashLite' || model === 'gemini35Flash') {
                         const result = processGeminiStream(buffer, model, accumulatedResponse, updateCallback);
                         if (result.hasNewData) accumulatedResponse = result.accumulatedResponse;
                     }
@@ -306,7 +306,7 @@ async function sendToAI(text, instruction) {
             'cohereApiKey', 'mistralApiKey', 'geminiApiKey',
             'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey',
             'cerebrasModel', 'selectedModel', 'instructions', 'google20FlashApiKey',
-            'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey',
+            'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey', 'gemini35FlashApiKey',
             'ollamaApiUrl', 'ollamaModelName', 'lmstudioApiUrl', 'lmstudioModelName', 'lmstudioContextLength'
         ]);
 
@@ -376,7 +376,7 @@ async function sendToAI(text, instruction) {
             const apiConfig = await getAPIConfig(result, combinedInstruction, text);
             console.log('API Config:', { url: apiConfig.url, isStreaming: apiConfig.isStreaming, model: result.selectedModel });
 
-            const isGeminiModel = result.selectedModel.startsWith('gemini') || result.selectedModel === 'gemini20Flash' || result.selectedModel === 'gemini25Flash' || result.selectedModel === 'gemini3Flash' || result.selectedModel === 'gemini31FlashLite';
+            const isGeminiModel = result.selectedModel.startsWith('gemini') || result.selectedModel === 'gemini20Flash' || result.selectedModel === 'gemini25Flash' || result.selectedModel === 'gemini3Flash' || result.selectedModel === 'gemini31FlashLite' || result.selectedModel === 'gemini35Flash';
             const isCohereModel = result.selectedModel === 'cohere';
             const willStream = apiConfig.isStreaming && (isGeminiModel || isCohereModel
                 || ['mistralSmall','groq','ollama','lmstudio'].includes(result.selectedModel));
@@ -934,6 +934,53 @@ async function getAPIConfig(result, instruction, text) {
                 }
                 const modelName = 'gemini-3.1-flash-lite';
                 // Gemini 3.1 Flash Lite 스트리밍 엔드포인트
+                config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`;
+                config.headers = {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                };
+                const requestBody = {
+                    contents: [{
+                        parts: [{
+                            text: `${config.instructions}\n${contextMessage}\n\n${instruction}`
+                        }]
+                    }],
+                    generationConfig: {
+                        temperature: 0,
+                        thinkingConfig: {
+                            thinkingBudget: 0
+                        }
+                    },
+                    safetySettings: [
+                        {
+                            category: "HARM_CATEGORY_HATE_SPEECH",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_HARASSMENT",
+                            threshold: "BLOCK_NONE"
+                        }
+                    ]
+                };
+                config.body = JSON.stringify(requestBody);
+                config.isStreaming = true;
+                config.modelName = modelName;
+                break;
+            }
+            case 'gemini35Flash': {
+                const apiKey = result.gemini35FlashApiKey?.trim();
+                if (!apiKey) {
+                    throw new Error('Gemini 3.5 Flash API 키가 설정되지 않았습니다.');
+                }
+                const modelName = 'gemini-3.5-flash';
                 config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`;
                 config.headers = {
                     'Content-Type': 'application/json',
