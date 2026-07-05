@@ -187,6 +187,10 @@ This project is under the MIT License.
 - [List major dependencies if any]
 
 ### Version History
+
+**v1.7.1 (July 5, 2026)**
+- Add Cerebras Gemma 4
+
 **v1.7.0 (May 15, 2026)**
 - Add Gemini 3.5 flash
 
