@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const CEREBRAS_ALLOWED_MODELS = ['llama3.1-8b', 'gpt-oss-120b', 'qwen-3-235b-a22b-instruct-2507'];
+    const CEREBRAS_ALLOWED_MODELS = ['llama3.1-8b', 'gpt-oss-120b', 'qwen-3-235b-a22b-instruct-2507', 'gemma-4-31b'];
     const CEREBRAS_FALLBACK_MODEL = 'llama3.1-8b';
 
     function normalizeCerebrasModel(model) {
