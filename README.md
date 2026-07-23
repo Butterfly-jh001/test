@@ -188,7 +188,7 @@ This project is under the MIT License.
 
 ### Version History
 
-**v1.7.1 (July 5, 2026)**
+**v1.7.2 (July 5, 2026)**
 - Add Gemini 3.6 flash, Gemini 3.5 flash lite
 
 **v1.7.1 (July 5, 2026)**
