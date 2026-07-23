@@ -466,6 +466,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 'gemini3FlashApiKey',
                 'gemini31FlashLiteApiKey',
                 'gemini35FlashApiKey',
+                'gemini36FlashApiKey',
+                'gemini35FlashLiteApiKey',
                 'google20FlashApiKey',
                 'gemini20FlashModelName',
                 'groqApiKey',
@@ -481,7 +483,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ], function (result) {
                 if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey &&
                     !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.gemini3FlashApiKey &&
-                    !result.gemini31FlashLiteApiKey && !result.gemini35FlashApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
+                    !result.gemini31FlashLiteApiKey && !result.gemini35FlashApiKey && !result.gemini36FlashApiKey && !result.gemini35FlashLiteApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
                     throw new Error("API 키를 설정해주세요.");
                 }
 
@@ -729,6 +731,94 @@ document.addEventListener('DOMContentLoaded', function () {
                                 temperature: 0,
                                 thinkingConfig: {
                                     thinkingBudget: 0
+                                }
+                            },
+                            safetySettings: [
+                                {
+                                    category: "HARM_CATEGORY_HATE_SPEECH",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_HARASSMENT",
+                                    threshold: "BLOCK_NONE"
+                                }
+                            ]
+                        });
+                        config.isStreaming = true;
+                        break;
+                    }
+                    case 'gemini36Flash': {
+                        const gemini36ApiKey = result.gemini36FlashApiKey;
+                        if (!gemini36ApiKey) {
+                            throw new Error('Gemini 3.6 Flash API 키가 설정되지 않았습니다.');
+                        }
+                        const modelName = 'gemini-3.6-flash';
+                        config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${gemini36ApiKey.trim()}`;
+                        config.headers = {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': gemini36ApiKey.trim()
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: {
+                                thinkingConfig: {
+                                    thinkingLevel: "minimal"
+                                }
+                            },
+                            safetySettings: [
+                                {
+                                    category: "HARM_CATEGORY_HATE_SPEECH",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_HARASSMENT",
+                                    threshold: "BLOCK_NONE"
+                                }
+                            ]
+                        });
+                        config.isStreaming = true;
+                        break;
+                    }
+                    case 'gemini35FlashLite': {
+                        const gemini35LiteApiKey = result.gemini35FlashLiteApiKey;
+                        if (!gemini35LiteApiKey) {
+                            throw new Error('Gemini 3.5 Flash Lite API 키가 설정되지 않았습니다.');
+                        }
+                        const modelName = 'gemini-3.5-flash-lite';
+                        config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${gemini35LiteApiKey.trim()}`;
+                        config.headers = {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': gemini35LiteApiKey.trim()
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: {
+                                thinkingConfig: {
+                                    thinkingLevel: "minimal"
                                 }
                             },
                             safetySettings: [

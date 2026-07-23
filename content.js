@@ -307,6 +307,7 @@ async function sendToAI(text, instruction) {
             'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey',
             'cerebrasModel', 'selectedModel', 'instructions', 'google20FlashApiKey',
             'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey', 'gemini35FlashApiKey',
+            'gemini36FlashApiKey', 'gemini35FlashLiteApiKey',
             'ollamaApiUrl', 'ollamaModelName', 'lmstudioApiUrl', 'lmstudioModelName', 'lmstudioContextLength'
         ]);
 
@@ -996,6 +997,98 @@ async function getAPIConfig(result, instruction, text) {
                         temperature: 0,
                         thinkingConfig: {
                             thinkingBudget: 0
+                        }
+                    },
+                    safetySettings: [
+                        {
+                            category: "HARM_CATEGORY_HATE_SPEECH",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_HARASSMENT",
+                            threshold: "BLOCK_NONE"
+                        }
+                    ]
+                };
+                config.body = JSON.stringify(requestBody);
+                config.isStreaming = true;
+                config.modelName = modelName;
+                break;
+            }
+            case 'gemini36Flash': {
+                const apiKey = result.gemini36FlashApiKey?.trim();
+                if (!apiKey) {
+                    throw new Error('Gemini 3.6 Flash API 키가 설정되지 않았습니다.');
+                }
+                const modelName = 'gemini-3.6-flash';
+                config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`;
+                config.headers = {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                };
+                const requestBody = {
+                    contents: [{
+                        parts: [{
+                            text: `${config.instructions}\n${contextMessage}\n\n${instruction}`
+                        }]
+                    }],
+                    generationConfig: {
+                        thinkingConfig: {
+                            thinkingLevel: "minimal"
+                        }
+                    },
+                    safetySettings: [
+                        {
+                            category: "HARM_CATEGORY_HATE_SPEECH",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_HARASSMENT",
+                            threshold: "BLOCK_NONE"
+                        }
+                    ]
+                };
+                config.body = JSON.stringify(requestBody);
+                config.isStreaming = true;
+                config.modelName = modelName;
+                break;
+            }
+            case 'gemini35FlashLite': {
+                const apiKey = result.gemini35FlashLiteApiKey?.trim();
+                if (!apiKey) {
+                    throw new Error('Gemini 3.5 Flash Lite API 키가 설정되지 않았습니다.');
+                }
+                const modelName = 'gemini-3.5-flash-lite';
+                config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`;
+                config.headers = {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                };
+                const requestBody = {
+                    contents: [{
+                        parts: [{
+                            text: `${config.instructions}\n${contextMessage}\n\n${instruction}`
+                        }]
+                    }],
+                    generationConfig: {
+                        thinkingConfig: {
+                            thinkingLevel: "minimal"
                         }
                     },
                     safetySettings: [
