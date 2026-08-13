@@ -137,6 +137,29 @@ document.addEventListener('DOMContentLoaded', function () {
         );
     }
 
+    function extractErrorMessage(errorText) {
+        if (!errorText) return '';
+        try {
+            const parsed = JSON.parse(errorText);
+            // Gemini 스타일: { error: { message, status } }
+            if (parsed && parsed.error && parsed.error.message) {
+                return parsed.error.message;
+            }
+            // 배열로 감싸진 Gemini 스타일: [ { error: { message } } ]
+            if (Array.isArray(parsed) && parsed[0] && parsed[0].error && parsed[0].error.message) {
+                return parsed[0].error.message;
+            }
+            // OpenAI 호환 스타일: { error: { message } } (위와 동일 처리됨) / { message }
+            if (parsed && parsed.message) {
+                return parsed.message;
+            }
+        } catch (_) {
+            // JSON이 아니면 원문 일부를 그대로 사용
+            return errorText.slice(0, 300);
+        }
+        return errorText.slice(0, 300);
+    }
+
     function overrideRequestModel(bodyString, newModel) {
         try {
             const obj = JSON.parse(bodyString);
@@ -171,12 +194,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     body: fallbackBody
                 });
                 if (!retryResponse.ok) {
-                    throw new Error(`HTTP error! status: ${retryResponse.status} - ${retryResponse.statusText}`);
+                    const retryErrorText = await retryResponse.text().catch(() => '');
+                    throw new Error(`HTTP error! status: ${retryResponse.status} - ${extractErrorMessage(retryErrorText) || retryResponse.statusText}`);
                 }
                 return retryResponse;
             }
 
-            throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+            throw new Error(`HTTP error! status: ${response.status} - ${extractErrorMessage(errorText) || response.statusText}`);
         }
 
         return response;
@@ -468,6 +492,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 'gemini35FlashApiKey',
                 'gemini36FlashApiKey',
                 'gemini35FlashLiteApiKey',
+                'gemini37FlashApiKey',
                 'google20FlashApiKey',
                 'gemini20FlashModelName',
                 'groqApiKey',
@@ -483,7 +508,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ], function (result) {
                 if (!result.cohereApiKey && !result.mistralApiKey && !result.geminiApiKey &&
                     !result.geminiflashApiKey && !result.gemini25FlashApiKey && !result.gemini3FlashApiKey &&
-                    !result.gemini31FlashLiteApiKey && !result.gemini35FlashApiKey && !result.gemini36FlashApiKey && !result.gemini35FlashLiteApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
+                    !result.gemini31FlashLiteApiKey && !result.gemini35FlashApiKey && !result.gemini36FlashApiKey && !result.gemini35FlashLiteApiKey && !result.gemini37FlashApiKey && !result.google20FlashApiKey && !result.groqApiKey && !result.cerebrasApiKey) {
                     throw new Error("API 키를 설정해주세요.");
                 }
 
@@ -775,6 +800,50 @@ document.addEventListener('DOMContentLoaded', function () {
                             generationConfig: {
                                 thinkingConfig: {
                                     thinkingLevel: "minimal"
+                                }
+                            },
+                            safetySettings: [
+                                {
+                                    category: "HARM_CATEGORY_HATE_SPEECH",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                    threshold: "BLOCK_NONE"
+                                },
+                                {
+                                    category: "HARM_CATEGORY_HARASSMENT",
+                                    threshold: "BLOCK_NONE"
+                                }
+                            ]
+                        });
+                        config.isStreaming = true;
+                        break;
+                    }
+                    case 'gemini37Flash': {
+                        const gemini37ApiKey = result.gemini37FlashApiKey;
+                        if (!gemini37ApiKey) {
+                            throw new Error('Gemini 3.7 Flash API 키가 설정되지 않았습니다.');
+                        }
+                        const modelName = 'gemini-3.7-flash';
+                        config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${gemini37ApiKey.trim()}`;
+                        config.headers = {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': gemini37ApiKey.trim()
+                        };
+                        config.body = (msg) => JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${config.instructions}\n${contextMessage}\n\n사용자 질문: ${msg}\n\n위 정보를 바탕으로 사용자의 질문에 답변해주세요.`
+                                }]
+                            }],
+                            generationConfig: {
+                                thinkingConfig: {
+                                    thinkingLevel: "low"
                                 }
                             },
                             safetySettings: [

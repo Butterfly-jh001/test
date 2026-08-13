@@ -307,7 +307,7 @@ async function sendToAI(text, instruction) {
             'geminiflashApiKey', 'groqApiKey', 'cerebrasApiKey',
             'cerebrasModel', 'selectedModel', 'instructions', 'google20FlashApiKey',
             'gemini25FlashApiKey', 'gemini3FlashApiKey', 'gemini31FlashLiteApiKey', 'gemini35FlashApiKey',
-            'gemini36FlashApiKey', 'gemini35FlashLiteApiKey',
+            'gemini36FlashApiKey', 'gemini35FlashLiteApiKey', 'gemini37FlashApiKey',
             'ollamaApiUrl', 'ollamaModelName', 'lmstudioApiUrl', 'lmstudioModelName', 'lmstudioContextLength'
         ]);
 
@@ -1043,6 +1043,52 @@ async function getAPIConfig(result, instruction, text) {
                     generationConfig: {
                         thinkingConfig: {
                             thinkingLevel: "minimal"
+                        }
+                    },
+                    safetySettings: [
+                        {
+                            category: "HARM_CATEGORY_HATE_SPEECH",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_HARASSMENT",
+                            threshold: "BLOCK_NONE"
+                        }
+                    ]
+                };
+                config.body = JSON.stringify(requestBody);
+                config.isStreaming = true;
+                config.modelName = modelName;
+                break;
+            }
+            case 'gemini37Flash': {
+                const apiKey = result.gemini37FlashApiKey?.trim();
+                if (!apiKey) {
+                    throw new Error('Gemini 3.7 Flash API 키가 설정되지 않았습니다.');
+                }
+                const modelName = 'gemini-3.7-flash';
+                config.url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`;
+                config.headers = {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                };
+                const requestBody = {
+                    contents: [{
+                        parts: [{
+                            text: `${config.instructions}\n${contextMessage}\n\n${instruction}`
+                        }]
+                    }],
+                    generationConfig: {
+                        thinkingConfig: {
+                            thinkingLevel: "low"
                         }
                     },
                     safetySettings: [
